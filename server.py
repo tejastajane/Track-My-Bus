@@ -59,14 +59,16 @@ def pcm_to_wav(pcm_bytes, sample_rate=24000, num_channels=1, bit_depth=16):
     return bytes(header) + pcm_bytes
 
 def call_gemini_tts(text, lang, api_key):
-    prompt_prefix = "Make a clear, official bus station arrival announcement: "
     lang_code = "en-IN"
+    delivery_style = "clear, official bus station arrival announcement"
     if lang == "mr":
-        prompt_prefix = "Make a clear, official bus station public arrival announcement in clear Marathi: "
         lang_code = "mr-IN"
+        delivery_style = "clear, official bus station public arrival announcement in Marathi"
     elif lang == "hi":
-        prompt_prefix = "Make a clear, official bus station public arrival announcement in clear Hindi: "
         lang_code = "hi-IN"
+        delivery_style = "clear, official bus station public arrival announcement in Hindi"
+
+    clean_text = text.strip().strip('"')
 
     models_to_try = ["gemini-3.8-flash-tts", "gemini-3.8-flash-lite-tts"]
     last_err = None
@@ -75,7 +77,12 @@ def call_gemini_tts(text, lang, api_key):
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
         payload = {
             "contents": [{
-                "parts": [{ "text": f'{prompt_prefix}"{text}"' }]
+                "parts": [{
+                    "text": clean_text,
+                    "speech_metadata": {
+                        "style": delivery_style
+                    }
+                }]
             }],
             "generationConfig": {
                 "responseModalities": ["AUDIO"],
