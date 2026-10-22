@@ -2034,28 +2034,27 @@ document.addEventListener('DOMContentLoaded', () => {
     // Filter routes by search query
     const filteredRoutes = allRoutes.filter(route => {
       if (!query) return true;
+      const q = query.toLowerCase();
 
-      const matchName = (route.name && route.name.toLowerCase().includes(query)) ||
-                        (route.nameMr && route.nameMr.includes(query)) ||
-                        (route.nameHi && route.nameHi.includes(query));
+      const firstStop = (route.origin || (route.stops && route.stops[0] && route.stops[0].name) || '').replace(/\s*\([^)]*\)/g, '').trim().toLowerCase();
+      const lastStop = (route.destination || (route.stops && route.stops[route.stops.length - 1] && route.stops[route.stops.length - 1].name) || '').replace(/\s*\([^)]*\)/g, '').trim().toLowerCase();
 
-      const matchEndpoints = (route.origin && route.origin.toLowerCase().includes(query)) ||
-                             (route.destination && route.destination.toLowerCase().includes(query)) ||
+      const matchEndpoints = firstStop.includes(q) || lastStop.includes(q) ||
+                             (route.origin && route.origin.toLowerCase().includes(q)) ||
+                             (route.destination && route.destination.toLowerCase().includes(q)) ||
                              (route.originMr && route.originMr.includes(query)) ||
                              (route.destinationMr && route.destinationMr.includes(query));
 
-      const matchVia = (route.via && route.via.toLowerCase().includes(query)) ||
-                       (route.viaMr && route.viaMr.includes(query));
-
-      const matchCode = (route.id && route.id.toLowerCase().includes(query)) ||
-                        (route.routeNumber && route.routeNumber.toLowerCase().includes(query));
+      const matchName = (route.name && route.name.toLowerCase().includes(q));
+      const matchCode = (route.id && route.id.toLowerCase().includes(q)) ||
+                        (route.routeNumber && route.routeNumber.toLowerCase().includes(q));
 
       const matchStop = route.stops && route.stops.some(s => 
-        (s.name && s.name.toLowerCase().includes(query)) ||
+        (s.name && s.name.toLowerCase().includes(q)) ||
         (s.nameMr && s.nameMr.includes(query))
       );
 
-      return matchName || matchEndpoints || matchVia || matchCode || matchStop;
+      return matchEndpoints || matchName || matchCode || matchStop;
     });
 
     if (filteredRoutes.length === 0) {
@@ -2093,25 +2092,18 @@ document.addEventListener('DOMContentLoaded', () => {
       const stops = route.stops || [];
       const isExpanded = routesScreenState.expandedRouteId === route.id;
 
-      const originText = (lang === 'mr' && route.originMr) ? route.originMr : route.origin;
-      const destText = (lang === 'mr' && route.destinationMr) ? route.destinationMr : route.destination;
-      const viaText = (lang === 'mr' && route.viaMr) ? route.viaMr : route.via;
+      // Strictly first stop and last stop
+      const firstStop = (route.origin || (stops[0] && stops[0].name) || 'Origin').replace(/\s*\([^)]*\)/g, '').trim();
+      const lastStop = (route.destination || (stops[stops.length - 1] && stops[stops.length - 1].name) || 'Destination').replace(/\s*\([^)]*\)/g, '').trim();
+      const routeTitle = `${firstStop} to ${lastStop}`;
 
-      // Clean metadata line
-      const metaParts = [];
-      if (viaText) metaParts.push(`Via ${viaText}`);
-      if (route.totalDistanceKm) metaParts.push(`${route.totalDistanceKm} km`);
-      if (route.duration) metaParts.push(route.duration);
-      const metaStr = metaParts.join(' · ');
-
-      // Stops list HTML when expanded
+      // Clean stops sequence in the drawer
       const stopsHtml = stops.map((st, idx) => {
-        const displayName = (lang === 'mr' && st.nameMr) ? st.nameMr : st.name;
+        const displayName = (st.name || '').replace(/\s*\([^)]*\)/g, '').trim();
         return `
           <div class="route-stop-line">
             <span class="route-stop-num">${idx + 1}</span>
             <span class="route-stop-title">${escapeNearbyHtml(displayName)}</span>
-            <span class="route-stop-eta">${escapeNearbyHtml(st.time || '--:--')}</span>
           </div>
         `;
       }).join('');
@@ -2121,18 +2113,27 @@ document.addEventListener('DOMContentLoaded', () => {
       itemEl.setAttribute('role', 'listitem');
 
       itemEl.innerHTML = `
-        <div class="route-row" tabindex="0" role="button" aria-expanded="${isExpanded}" aria-label="${escapeNearbyHtml(originText)} to ${escapeNearbyHtml(destText)}, ${escapeNearbyHtml(metaStr)}">
-          <div class="route-code-badge" aria-hidden="true">${escapeNearbyHtml(route.id || 'R')}</div>
+        <div class="route-row" tabindex="0" role="button" aria-expanded="${isExpanded}" aria-label="${escapeNearbyHtml(routeTitle)}">
+          <div class="route-transit-icon" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M8 6v6"/>
+              <path d="M16 6v6"/>
+              <path d="M4 12h16"/>
+              <rect x="4" y="3" width="16" height="15" rx="2"/>
+              <circle cx="8" cy="15" r="1" fill="currentColor"/>
+              <circle cx="16" cy="15" r="1" fill="currentColor"/>
+              <path d="M6 18v2"/>
+              <path d="M18 18v2"/>
+            </svg>
+          </div>
           <div class="route-content">
             <div class="route-endpoints">
-              <span class="route-name-text">${escapeNearbyHtml(originText)}</span>
-              <span class="route-arrow" aria-hidden="true">→</span>
-              <span class="route-name-text">${escapeNearbyHtml(destText)}</span>
+              <span class="route-name-text">${escapeNearbyHtml(firstStop)}</span>
+              <span class="route-to-separator">to</span>
+              <span class="route-name-text">${escapeNearbyHtml(lastStop)}</span>
             </div>
-            <div class="route-meta-sub">${escapeNearbyHtml(metaStr)}</div>
           </div>
           <div class="route-trailing">
-            ${route.frequency ? `<span class="route-freq-pill">${escapeNearbyHtml(route.frequency)}</span>` : ''}
             <span class="route-chevron ${isExpanded ? 'open' : ''}" aria-hidden="true">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
                 <polyline points="9 18 15 12 9 6"/>
@@ -2144,7 +2145,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="route-drawer ${isExpanded ? 'open' : ''}">
           <div class="route-drawer-inner">
             <div class="route-drawer-heading">
-              <span>Stops &amp; Scheduled Times (${stops.length})</span>
+              <span>Route Stops (${stops.length})</span>
               ${runningBuses.length > 0 ? `<span class="route-live-tag">● ${runningBuses.length} Active Bus${runningBuses.length > 1 ? 'es' : ''}</span>` : ''}
             </div>
             <div class="route-stops-sequence">
