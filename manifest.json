@@ -1,0 +1,19 @@
+{
+  "name": "Track My Bus — Live Bus Tracking",
+  "short_name": "Track My Bus",
+  "description": "Know before you wait. Live MSRTC bus tracking, schedules, and station arrivals.",
+  "start_url": "/",
+  "id": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0B132B",
+  "theme_color": "#EF4444",
+  "icons": [
+    {
+      "src": "assets/logo.png",
+      "sizes": "192x192 512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

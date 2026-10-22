@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "cleanUrls": true,
+  "rewrites": [
+    {
+      "source": "/api/tts",
+      "destination": "/api/tts.py"
+    }
+  ]
+}
