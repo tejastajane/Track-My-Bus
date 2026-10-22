@@ -1977,22 +1977,26 @@ document.addEventListener('DOMContentLoaded', () => {
   // SCREEN 3: BUS ROUTES NETWORK (CORRIDORS & FLEET)
   // --------------------------------------------------------------------------
 
+  // --------------------------------------------------------------------------
+  // Dedicated Bus Routes & Timetable Screen (Apple HIG Minimal Transit Design)
+  // --------------------------------------------------------------------------
+
   const routesScreenState = {
-    activeCategory: 'all',
     searchQuery: '',
-    expandedStops: {},
-    expandedBuses: {},
+    expandedRouteId: null,
     initialized: false
   };
 
   function setupRoutesScreen() {
+    if (routesScreenState.initialized) return;
+    routesScreenState.initialized = true;
+
     const searchInput = document.getElementById('routes-search-input');
     const clearBtn = document.getElementById('btn-clear-routes-search');
-    const filterPills = document.getElementById('routes-filter-pills');
 
     if (searchInput) {
       searchInput.addEventListener('input', (e) => {
-        routesScreenState.searchQuery = e.target.value.trim().toLowerCase();
+        routesScreenState.searchQuery = (e.target.value || '').trim().toLowerCase();
         if (clearBtn) {
           clearBtn.style.display = routesScreenState.searchQuery ? 'flex' : 'none';
         }
@@ -2002,46 +2006,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (clearBtn) {
       clearBtn.addEventListener('click', () => {
-        if (searchInput) searchInput.value = '';
+        if (searchInput) {
+          searchInput.value = '';
+          searchInput.focus();
+        }
         routesScreenState.searchQuery = '';
         clearBtn.style.display = 'none';
         renderRoutesCards();
-        if (searchInput) searchInput.focus();
       });
     }
-
-    if (filterPills) {
-      filterPills.querySelectorAll('.routes-pill').forEach(pill => {
-        pill.addEventListener('click', (e) => {
-          filterPills.querySelectorAll('.routes-pill').forEach(p => p.classList.remove('active'));
-          e.currentTarget.classList.add('active');
-          routesScreenState.activeCategory = e.currentTarget.dataset.category || 'all';
-          renderRoutesCards();
-        });
-      });
-    }
-
-    routesScreenState.initialized = true;
   }
 
   function renderRoutesScreen() {
-    if (!routesScreenState.initialized) {
-      setupRoutesScreen();
-    }
-
-    // Synchronize network summary metrics
-    const statCount = document.getElementById('routes-stat-count');
-    const statBuses = document.getElementById('routes-stat-buses');
-    const statStops = document.getElementById('routes-stat-stops');
-
-    const allRoutes = SMART_ST_DATA.routes || [];
-    const allBuses = SMART_ST_DATA.buses || [];
-    const totalStops = allRoutes.reduce((acc, r) => acc + (r.stops ? r.stops.length : 0), 0);
-
-    if (statCount) statCount.textContent = allRoutes.length;
-    if (statBuses) statBuses.textContent = allBuses.length;
-    if (statStops) statStops.textContent = totalStops;
-
+    setupRoutesScreen();
     renderRoutesCards();
   }
 
@@ -2052,18 +2029,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const allRoutes = SMART_ST_DATA.routes || [];
     const allBuses = SMART_ST_DATA.buses || [];
     const query = routesScreenState.searchQuery;
-    const cat = routesScreenState.activeCategory;
     const lang = state.currentLanguage;
-    const dict = SMART_ST_DATA.i18n[lang] || SMART_ST_DATA.i18n.en;
 
-    // Filter routes by category and search term
+    // Filter routes by search query
     const filteredRoutes = allRoutes.filter(route => {
-      // Category filter
-      if (cat !== 'all' && route.category !== cat) {
-        return false;
-      }
-
-      // Search query filter
       if (!query) return true;
 
       const matchName = (route.name && route.name.toLowerCase().includes(query)) ||
@@ -2086,29 +2055,34 @@ document.addEventListener('DOMContentLoaded', () => {
         (s.nameMr && s.nameMr.includes(query))
       );
 
-      const matchBus = allBuses.some(b => 
-        b.routeId === route.id && 
-        ((b.number && b.number.toLowerCase().includes(query)) ||
-         (b.type && b.type.toLowerCase().includes(query)))
-      );
-
-      return matchName || matchEndpoints || matchVia || matchCode || matchStop || matchBus;
+      return matchName || matchEndpoints || matchVia || matchCode || matchStop;
     });
 
     if (filteredRoutes.length === 0) {
       container.innerHTML = `
-        <div class="card text-center p-4">
-          <div style="margin-bottom: 8px; color: var(--apple-label-tertiary);">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        <div class="nearby-empty-state">
+          <div class="nearby-empty-icon" aria-hidden="true">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
             </svg>
           </div>
-          <div style="font-weight: 700; font-size: 16px; margin-bottom: 4px;">No routes found</div>
-          <div class="text-sm text-secondary">
-            No MSRTC bus routes match "${query}". Try searching for Nashik, Shirdi, Pune, Yeola, or Niphad.
-          </div>
+          <h3 class="nearby-empty-title">No routes found</h3>
+          <p class="nearby-empty-subtitle">No bus routes match &ldquo;${escapeNearbyHtml(query)}&rdquo;. Try searching for Nashik, Shirdi, Pune, or Yeola.</p>
+          <button type="button" class="nearby-empty-reset-btn" id="btn-routes-reset-search">Clear Search</button>
         </div>
       `;
+      const resetBtn = document.getElementById('btn-routes-reset-search');
+      if (resetBtn) {
+        resetBtn.addEventListener('click', () => {
+          const searchInput = document.getElementById('routes-search-input');
+          const clearBtn = document.getElementById('btn-clear-routes-search');
+          if (searchInput) searchInput.value = '';
+          if (clearBtn) clearBtn.style.display = 'none';
+          routesScreenState.searchQuery = '';
+          renderRoutesCards();
+        });
+      }
       return;
     }
 
@@ -2117,233 +2091,105 @@ document.addEventListener('DOMContentLoaded', () => {
     filteredRoutes.forEach(route => {
       const runningBuses = allBuses.filter(b => b.routeId === route.id);
       const stops = route.stops || [];
-      const isStopsExpanded = !!routesScreenState.expandedStops[route.id];
-      const isBusesExpanded = !!routesScreenState.expandedBuses[route.id];
+      const isExpanded = routesScreenState.expandedRouteId === route.id;
 
-      // Find earliest arriving / nearest active bus
-      let nearestBus = null;
-      if (runningBuses.length > 0) {
-        nearestBus = [...runningBuses].sort((a, b) => (a.etaMinutes || 999) - (b.etaMinutes || 999))[0];
-      }
-
-      // Localized text
       const originText = (lang === 'mr' && route.originMr) ? route.originMr : route.origin;
       const destText = (lang === 'mr' && route.destinationMr) ? route.destinationMr : route.destination;
       const viaText = (lang === 'mr' && route.viaMr) ? route.viaMr : route.via;
 
-      // Service types chips
-      const busTypesHtml = (route.busTypes || []).map(t => `<span class="route-type-chip">${t.split('(')[0].trim()}</span>`).join('');
+      // Clean metadata line
+      const metaParts = [];
+      if (viaText) metaParts.push(`Via ${viaText}`);
+      if (route.totalDistanceKm) metaParts.push(`${route.totalDistanceKm} km`);
+      if (route.duration) metaParts.push(route.duration);
+      const metaStr = metaParts.join(' · ');
 
-      // Stops list HTML
-      const stopsTimelineHtml = stops.map((st, idx) => {
+      // Stops list HTML when expanded
+      const stopsHtml = stops.map((st, idx) => {
         const displayName = (lang === 'mr' && st.nameMr) ? st.nameMr : st.name;
-        const subName = (lang === 'mr') ? st.name : (st.nameMr || '');
-        const isTarget = st.isCurrentTarget;
-        const statusBadge = isTarget ? '<span class="badge badge-green">NEXT STOP</span>' : `<span class="text-xs" style="color:var(--text-secondary);">${st.status}</span>`;
-
         return `
-          <div class="route-stop-timeline-item">
-            <span class="route-stop-idx">${idx + 1}</span>
-            <div class="route-stop-names">
-              <span class="route-stop-name-en">${displayName}</span>
-              ${subName ? `<span class="route-stop-name-mr">${subName}</span>` : ''}
-            </div>
-            <div style="text-align: right;">
-              <div class="route-stop-time">${st.time}</div>
-              ${statusBadge}
-            </div>
+          <div class="route-stop-line">
+            <span class="route-stop-num">${idx + 1}</span>
+            <span class="route-stop-title">${escapeNearbyHtml(displayName)}</span>
+            <span class="route-stop-eta">${escapeNearbyHtml(st.time || '--:--')}</span>
           </div>
         `;
       }).join('');
 
-      // Running buses HTML
-      const runningBusesHtml = runningBuses.map(b => {
-        const isLate = b.delayMinutes > 0;
-        const statusClass = isLate ? 'badge-orange' : 'badge-green';
-        const statusText = isLate ? `${b.delayMinutes}m late` : 'On Time';
+      const itemEl = document.createElement('div');
+      itemEl.className = 'route-item-wrap';
+      itemEl.setAttribute('role', 'listitem');
 
-        return `
-          <div class="route-bus-mini-card">
-            <div class="route-bus-mini-header">
-              <span class="route-bus-num">${b.number}</span>
-              <span class="badge ${statusClass}">● ${statusText}</span>
+      itemEl.innerHTML = `
+        <div class="route-row" tabindex="0" role="button" aria-expanded="${isExpanded}" aria-label="${escapeNearbyHtml(originText)} to ${escapeNearbyHtml(destText)}, ${escapeNearbyHtml(metaStr)}">
+          <div class="route-code-badge" aria-hidden="true">${escapeNearbyHtml(route.id || 'R')}</div>
+          <div class="route-content">
+            <div class="route-endpoints">
+              <span class="route-name-text">${escapeNearbyHtml(originText)}</span>
+              <span class="route-arrow" aria-hidden="true">→</span>
+              <span class="route-name-text">${escapeNearbyHtml(destText)}</span>
             </div>
-            <div class="text-xs" style="color:var(--text-secondary); font-weight:600;">
-              ${b.type}
+            <div class="route-meta-sub">${escapeNearbyHtml(metaStr)}</div>
+          </div>
+          <div class="route-trailing">
+            ${route.frequency ? `<span class="route-freq-pill">${escapeNearbyHtml(route.frequency)}</span>` : ''}
+            <span class="route-chevron ${isExpanded ? 'open' : ''}" aria-hidden="true">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="9 18 15 12 9 6"/>
+              </svg>
+            </span>
+          </div>
+        </div>
+
+        <div class="route-drawer ${isExpanded ? 'open' : ''}">
+          <div class="route-drawer-inner">
+            <div class="route-drawer-heading">
+              <span>Stops &amp; Scheduled Times (${stops.length})</span>
+              ${runningBuses.length > 0 ? `<span class="route-live-tag">● ${runningBuses.length} Active Bus${runningBuses.length > 1 ? 'es' : ''}</span>` : ''}
             </div>
-            <div class="route-bus-mini-telemetry">
-              <span>Speed: <strong>${b.speed} km/h</strong></span>
-              <span>Seats: <strong>${b.occupancy}</strong></span>
-              <span>ETA: <strong style="color:var(--status-green);">${b.etaMinutes} min</strong></span>
+            <div class="route-stops-sequence">
+              ${stopsHtml}
             </div>
-            <button type="button" class="route-bus-track-action-btn" data-bus-id="${b.id}">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 5px;"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>
-              <span>Track on Live Map</span>
+            <button type="button" class="route-track-map-btn" data-route-id="${route.id}">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/>
+                <line x1="8" y1="2" x2="8" y2="18"/>
+                <line x1="16" y1="6" x2="16" y2="22"/>
+              </svg>
+              <span>Track Route on Live Map</span>
             </button>
-          </div>
-        `;
-      }).join('');
-
-      const card = document.createElement('div');
-      card.className = 'route-card';
-      card.id = `route-card-${route.id}`;
-      card.innerHTML = `
-        <!-- Card Header -->
-        <div class="route-card-header">
-          <div class="route-badge-and-title">
-            <span class="route-code-pill">${route.id}</span>
-            <div class="route-title-group">
-              <div class="route-title-text">${originText} <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:middle;"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg> ${destText}</div>
-              <div class="route-title-mr">${route.nameMr || ''}</div>
-            </div>
-          </div>
-          <span class="route-fleet-status">
-            ● ${runningBuses.length} Live Buses
-          </span>
-        </div>
-
-        <!-- Path Visual: Origin to Destination -->
-        <div class="route-path-visual">
-          <div class="route-path-point start">
-            <div class="route-path-dot origin"></div>
-            <span class="route-path-name">${originText}</span>
-            <span class="route-path-tag">Origin</span>
-          </div>
-
-          <div class="route-path-connector">
-            <div class="route-path-line"></div>
-            <span class="route-path-stops-badge">${stops.length} Stops • ${route.totalDistanceKm} km</span>
-          </div>
-
-          <div class="route-path-point end">
-            <div class="route-path-dot dest"></div>
-            <span class="route-path-name">${destText}</span>
-            <span class="route-path-tag">Destination</span>
-          </div>
-        </div>
-
-        <!-- Via Corridor -->
-        <div class="route-via-row">
-          <span class="route-via-label">Via:</span>
-          <span>${viaText}</span>
-        </div>
-
-        <!-- Key Metrics Strip -->
-        <div class="route-metrics-grid">
-          <div class="route-metric-item">
-            <span class="route-metric-val">${stops.length}</span>
-            <span class="route-metric-lbl">Stops</span>
-          </div>
-          <div class="route-metric-item">
-            <span class="route-metric-val">${route.totalDistanceKm} km</span>
-            <span class="route-metric-lbl">Distance</span>
-          </div>
-          <div class="route-metric-item">
-            <span class="route-metric-val">${route.duration}</span>
-            <span class="route-metric-lbl">Duration</span>
-          </div>
-          <div class="route-metric-item">
-            <span class="route-metric-val">${route.frequency}</span>
-            <span class="route-metric-lbl">Frequency</span>
-          </div>
-        </div>
-
-        <!-- Bus Types Available -->
-        <div class="route-types-row">
-          <span class="text-xs" style="font-weight:700; color:var(--text-secondary);">Services:</span>
-          ${busTypesHtml}
-        </div>
-
-        <!-- Next Bus Live Preview Pill -->
-        ${nearestBus ? `
-          <div class="route-next-bus-pill">
-            <div class="route-next-bus-left">
-              <span class="pulse-dot"></span>
-              <span>Next: <strong>${nearestBus.number}</strong> (${nearestBus.type.split('(')[0].trim()})</span>
-            </div>
-            <div class="route-next-bus-eta">
-              ETA: ${nearestBus.etaMinutes} mins (${nearestBus.distanceFromStop || 3} km away)
-            </div>
-          </div>
-        ` : ''}
-
-        <!-- Interactive Actions -->
-        <div class="route-actions-row">
-          <button type="button" class="route-btn route-btn-primary btn-track-full-route" data-route-id="${route.id}">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>
-            <span>${dict.trackLiveMap || 'Track on Map'}</span>
-          </button>
-          <button type="button" class="route-btn route-btn-secondary btn-toggle-stops ${isStopsExpanded ? 'expanded' : ''}" data-route-id="${route.id}">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
-            <span>${isStopsExpanded ? (dict.hideStops || 'Hide Stops') : (dict.viewStops || 'View Stops')} (${stops.length})</span>
-          </button>
-          <button type="button" class="route-btn route-btn-secondary btn-toggle-buses ${isBusesExpanded ? 'expanded' : ''}" data-route-id="${route.id}">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 17h2V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v10h2"/><circle cx="7" cy="17" r="2"/><path d="M9 17h6"/><circle cx="17" cy="17" r="2"/><path d="M4 11h16"/><path d="M4 7h16"/></svg>
-            <span>${isBusesExpanded ? (dict.hideLiveBuses || 'Hide Buses') : (dict.viewLiveBuses || 'Live Buses')} (${runningBuses.length})</span>
-          </button>
-        </div>
-
-        <!-- Collapsible Stops Drawer -->
-        <div class="route-collapsible-drawer route-stops-drawer ${isStopsExpanded ? 'open' : ''}" id="stops-drawer-${route.id}">
-          <div class="route-drawer-header">
-            <span>All ${stops.length} Intermediate Waypoints</span>
-            <span class="text-xs text-secondary">Ordered Sequence</span>
-          </div>
-          <div class="route-stops-list">
-            ${stopsTimelineHtml}
-          </div>
-        </div>
-
-        <!-- Collapsible Buses Drawer -->
-        <div class="route-collapsible-drawer route-buses-drawer ${isBusesExpanded ? 'open' : ''}" id="buses-drawer-${route.id}">
-          <div class="route-drawer-header">
-            <span>${runningBuses.length} Active Buses on this Route</span>
-            <span class="badge badge-green">● Live Telemetry</span>
-          </div>
-          <div class="route-buses-grid">
-            ${runningBusesHtml}
           </div>
         </div>
       `;
 
-      // Event Listeners for this card
-      // 1. Track full route on map
-      card.querySelector('.btn-track-full-route').addEventListener('click', () => {
-        const repBus = runningBuses[0] || SMART_ST_DATA.buses[0];
-        if (repBus) {
-          state.selectedBus = repBus;
-          navigateTo('tracking-view', { busId: repBus.id });
+      // Click / keydown handler to toggle expansion
+      const rowBtn = itemEl.querySelector('.route-row');
+      rowBtn.addEventListener('click', () => {
+        routesScreenState.expandedRouteId = isExpanded ? null : route.id;
+        renderRoutesCards();
+      });
+      rowBtn.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          routesScreenState.expandedRouteId = isExpanded ? null : route.id;
+          renderRoutesCards();
         }
       });
 
-      // 2. Toggle stops drawer
-      card.querySelector('.btn-toggle-stops').addEventListener('click', (e) => {
-        const rId = e.currentTarget.dataset.routeId;
-        routesScreenState.expandedStops[rId] = !routesScreenState.expandedStops[rId];
-        renderRoutesCards();
-      });
-
-      // 3. Toggle buses drawer
-      card.querySelector('.btn-toggle-buses').addEventListener('click', (e) => {
-        const rId = e.currentTarget.dataset.routeId;
-        routesScreenState.expandedBuses[rId] = !routesScreenState.expandedBuses[rId];
-        renderRoutesCards();
-      });
-
-      // 4. Track specific bus buttons inside buses drawer
-      card.querySelectorAll('.route-bus-track-action-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
+      // Track on map button
+      const trackBtn = itemEl.querySelector('.route-track-map-btn');
+      if (trackBtn) {
+        trackBtn.addEventListener('click', (e) => {
           e.stopPropagation();
-          const busId = e.currentTarget.dataset.busId;
-          const found = SMART_ST_DATA.buses.find(b => b.id === busId);
-          if (found) {
-            state.selectedBus = found;
-            navigateTo('tracking-view', { busId: found.id });
+          const repBus = runningBuses[0] || SMART_ST_DATA.buses.find(b => b.routeId === route.id) || SMART_ST_DATA.buses[0];
+          if (repBus) {
+            state.selectedBus = repBus;
+            navigateTo('tracking-view', { busId: repBus.id });
           }
         });
-      });
+      }
 
-      container.appendChild(card);
+      container.appendChild(itemEl);
     });
   }
 
