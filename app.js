@@ -2753,117 +2753,343 @@ document.addEventListener('DOMContentLoaded', () => {
     showToast(`Map Type: ${layerDef.name}`);
   }
 
-  function renderMapBusChips() {
-    const container = document.getElementById('map-bus-chips-container');
-    if (!container) return;
-    container.innerHTML = '';
+  // Helper to extract clean, uncluttered route endpoint names (e.g. "Nashik CBS (Thakkar Bazar)" -> "Nashik")
+  function getShortRouteEndpoint(name) {
+    if (!name) return '';
+    return name
+      .replace(/\s*\([^)]*\)/g, '') // remove parenthetical suffixes
+      .replace(/\bCBS\b/gi, '')
+      .replace(/\s+(Central Bus Stand|Bus Stand|Central|Stand|Asiad Stand|Temple Stand|Industrial Stand|Railway Phata|Bus Stop|थांबा|स्थानक)$/i, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
 
-    const currentBus = state.selectedBus;
-    const currentRouteId = currentBus ? currentBus.routeId : 'R-NSK-YEO';
-    const userStop = state.activeStop;
+  // Check if a route serves a given bus stop
+  function routeServesStop(route, stop) {
+    if (!route || !route.stops || !Array.isArray(route.stops) || !stop) return false;
+    const stopId = stop.id;
+    const stopName = (stop.name || '').trim().toLowerCase();
+    const stopNameMr = (stop.nameMr || '').trim();
 
-    // Filter to ONLY buses running on the SAME corridor route
-    const sameRouteBuses = SMART_ST_DATA.buses.filter(b => b.routeId === currentRouteId);
-    const candidateBuses = sameRouteBuses.length > 0 ? sameRouteBuses : (currentBus ? [currentBus] : SMART_ST_DATA.buses.slice(0, 3));
-
-    // Map each bus with pass/upcoming status
-    const mappedBuses = candidateBuses.map(b => {
-      let userStopIdx = -1;
-      if (b.intermediateStops && userStop) {
-        userStopIdx = b.intermediateStops.findIndex(st => {
-          if (st.name && userStop.name && st.name.trim().toLowerCase() === userStop.name.trim().toLowerCase()) return true;
-          if (st.nameMr && userStop.nameMr && st.nameMr.trim() === userStop.nameMr.trim()) return true;
-          if (st.lat && st.lng && userStop.latitude && userStop.longitude) {
-            return calculateDistanceKm(st.lat, st.lng, userStop.latitude, userStop.longitude) < 0.8;
-          }
-          return false;
-        });
-
-        if (userStopIdx === -1 && userStop.latitude && userStop.longitude) {
-          let minD = Infinity, closestIdx = -1;
-          b.intermediateStops.forEach((st, idx) => {
-            if (st.lat && st.lng) {
-              const d = calculateDistanceKm(st.lat, st.lng, userStop.latitude, userStop.longitude);
-              if (d < minD) { minD = d; closestIdx = idx; }
-            }
-          });
-          if (minD < 8.0) {
-            userStopIdx = closestIdx;
-          }
-        }
+    return route.stops.some(s => {
+      if (stopId && s.id === stopId) return true;
+      if (s.name && s.name.trim().toLowerCase() === stopName) return true;
+      if (stopNameMr && s.nameMr && s.nameMr.trim() === stopNameMr) return true;
+      if (s.lat && s.lng && stop.latitude && stop.longitude) {
+        return calculateDistanceKm(s.lat, s.lng, stop.latitude, stop.longitude) < 0.6;
       }
-
-      let targetStopIdx = -1;
-      if (b.intermediateStops) {
-        targetStopIdx = b.intermediateStops.findIndex(st => st.isCurrentTarget);
-        if (targetStopIdx === -1) {
-          targetStopIdx = b.intermediateStops.findIndex(st => st.status !== 'Departed');
-        }
-      }
-
-      let isPassed = false;
-      if (userStopIdx !== -1) {
-        if (targetStopIdx === -1) {
-          isPassed = true;
-        } else if (targetStopIdx > userStopIdx) {
-          isPassed = true;
-        } else {
-          isPassed = false;
-        }
-      } else {
-        const mid = b.intermediateStops ? Math.floor(b.intermediateStops.length / 2) : 10;
-        isPassed = targetStopIdx > mid;
-      }
-
-      return { bus: b, isPassed };
-    });
-
-    // Sort so UPCOMING buses are shown first!
-    mappedBuses.sort((a, b) => {
-      if (a.isPassed !== b.isPassed) return a.isPassed ? 1 : -1;
-      return 0;
-    });
-
-    mappedBuses.forEach(item => {
-      const b = item.bus;
-      const isPassed = item.isPassed;
-      const isSelected = currentBus ? (b.id === currentBus.id) : false;
-
-      const chip = document.createElement('button');
-      const statusClass = isPassed ? 'chip-passed' : 'chip-upcoming';
-      chip.className = `map-bus-chip ${statusClass} ${isSelected ? 'active' : ''}`;
-
-      const shortPlate = b.number.replace('MH 15 ', '');
-      const schedTime = b.scheduledTime || (b.intermediateStops && b.intermediateStops[0] ? b.intermediateStops[0].time : '--:--');
-
-      let badgeLabel = '';
-      if (isSelected) {
-        badgeLabel = isPassed ? 'Passed ● Live' : 'Upcoming ● Live';
-      } else if (isPassed) {
-        badgeLabel = 'Passed';
-      } else {
-        badgeLabel = 'Upcoming';
-      }
-
-      chip.innerHTML = `
-        <span class="chip-num">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="vertical-align:-1px; margin-right:3px;"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M7 18v2M17 18v2M3 10h18"/><circle cx="7.5" cy="14.5" r="1"/><circle cx="16.5" cy="14.5" r="1"/></svg>${shortPlate}
-        </span>
-        <span class="chip-time">${schedTime}</span>
-        <span class="chip-status-tag">${badgeLabel}</span>
-      `;
-
-      const stopLabel = userStop ? getStopDisplayName(userStop) : 'your stop';
-      chip.title = `${b.number} (${b.type})\nScheduled Departure: ${schedTime}\nStatus for ${stopLabel}: ${isPassed ? 'Passed your stop' : 'Upcoming for your stop'}${isSelected ? ' (Currently Tracking)' : ''}`;
-
-      chip.addEventListener('click', () => {
-        state.selectedBus = b;
-        renderTrackingScreen();
-      });
-
-      container.appendChild(chip);
+      return false;
     });
   }
+
+  // Render the Dynamic Route & Bus Selector Accordion (Matches Reference Design)
+  function renderLiveTrackingSelector() {
+    const container = document.getElementById('tracking-routes-accordion');
+    if (!container) return;
+
+    const stop = state.activeStop || (SMART_ST_DATA.busStops && SMART_ST_DATA.busStops[0]);
+    const currentBus = state.selectedBus;
+    const allRoutes = SMART_ST_DATA.routes || [];
+    const allBuses = SMART_ST_DATA.buses || [];
+    const lang = state.currentLanguage || 'en';
+
+    // 1. Find all routes serving this stop
+    let stopRoutes = allRoutes.filter(r => routeServesStop(r, stop));
+
+    // Ensure the route of the currently selected bus is present
+    if (currentBus && currentBus.routeId) {
+      const currentRoute = allRoutes.find(r => r.id === currentBus.routeId);
+      if (currentRoute && !stopRoutes.some(r => r.id === currentRoute.id)) {
+        stopRoutes.unshift(currentRoute);
+      }
+    }
+
+    // Fallback if stop has no matching routes: show routes with active buses
+    if (stopRoutes.length === 0) {
+      stopRoutes = allRoutes.filter(r => allBuses.some(b => b.routeId === r.id));
+    }
+
+    // Sort routes: selected bus route first, then routes with the most live buses
+    stopRoutes.sort((a, b) => {
+      if (currentBus) {
+        if (a.id === currentBus.routeId) return -1;
+        if (b.id === currentBus.routeId) return 1;
+      }
+      const countA = allBuses.filter(bus => bus.routeId === a.id).length;
+      const countB = allBuses.filter(bus => bus.routeId === b.id).length;
+      return countB - countA;
+    });
+
+    // By default, expand the route of the currently selected bus
+    if (!state.expandedRouteId && currentBus) {
+      state.expandedRouteId = currentBus.routeId;
+    }
+    if (!state.expandedRouteId && stopRoutes.length > 0) {
+      state.expandedRouteId = stopRoutes[0].id;
+    }
+
+    container.innerHTML = '';
+
+    stopRoutes.forEach(route => {
+      // Find all buses assigned to this route
+      const routeBuses = allBuses.filter(b => b.routeId === route.id);
+      const isExpanded = (state.expandedRouteId === route.id);
+
+      // Clean, uncluttered route title
+      const origName = (lang === 'mr' && route.originMr) ? getShortRouteEndpoint(route.originMr) : getShortRouteEndpoint(route.origin);
+      const destName = (lang === 'mr' && route.destinationMr) ? getShortRouteEndpoint(route.destinationMr) : getShortRouteEndpoint(route.destination);
+      const routeTitle = `${origName} → ${destName}`;
+
+      // Dynamic bus count label
+      const busCount = routeBuses.length;
+      let busCountLabel = '';
+      if (lang === 'mr') {
+        busCountLabel = `${busCount} ${busCount === 1 ? 'बस उपलब्ध' : 'बसेस उपलब्ध'}`;
+      } else if (lang === 'hi') {
+        busCountLabel = `${busCount} ${busCount === 1 ? 'बस उपलब्ध' : 'बसें उपलब्ध'}`;
+      } else {
+        busCountLabel = `${busCount} ${busCount === 1 ? 'bus on this route' : 'buses on this route'}`;
+      }
+
+      // Create Accordion Item
+      const itemEl = document.createElement('div');
+      itemEl.className = `route-accordion-item ${isExpanded ? 'active' : ''}`;
+      itemEl.dataset.routeId = route.id;
+
+      // Accordion Header
+      const headerEl = document.createElement('div');
+      headerEl.className = 'route-accordion-header';
+      headerEl.setAttribute('role', 'button');
+      headerEl.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
+      headerEl.setAttribute('tabindex', '0');
+
+      headerEl.innerHTML = `
+        <div class="route-header-main">
+          <div class="route-icon-indicator" aria-hidden="true">
+            <svg width="18" height="26" viewBox="0 0 18 26" fill="none">
+              <circle cx="9" cy="4.5" r="3" stroke="currentColor" stroke-width="2.5" fill="none"/>
+              <line x1="9" y1="8" x2="9" y2="18" stroke="currentColor" stroke-width="2" stroke-dasharray="2 2"/>
+              <circle cx="9" cy="21.5" r="3" stroke="currentColor" stroke-width="2.5" fill="none"/>
+            </svg>
+          </div>
+          <div class="route-header-text">
+            <div class="route-title">${routeTitle}</div>
+            <div class="route-subtitle">${busCountLabel}</div>
+          </div>
+        </div>
+        <div class="route-chevron-btn" aria-hidden="true">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="6 9 12 15 18 9"></polyline>
+          </svg>
+        </div>
+      `;
+
+      // Accordion Body
+      const bodyEl = document.createElement('div');
+      bodyEl.className = 'route-accordion-body';
+
+      const busListEl = document.createElement('div');
+      busListEl.className = 'bus-tiles-list';
+
+      if (routeBuses.length === 0) {
+        busListEl.innerHTML = `
+          <div class="route-empty-msg">
+            ${lang === 'mr' ? 'या मार्गावर सध्या थेट बस उपलब्ध नाही' : (lang === 'hi' ? 'इस रूट पर वर्तमान में कोई लाइव बस नहीं है' : 'No live buses currently tracked on this route')}
+          </div>
+        `;
+      } else {
+        routeBuses.forEach(b => {
+          const isSelected = currentBus && (b.id === currentBus.id);
+
+          const tileEl = document.createElement('div');
+          tileEl.className = `bus-tile ${isSelected ? 'selected' : ''}`;
+          tileEl.dataset.busId = b.id;
+          tileEl.setAttribute('role', 'button');
+          tileEl.setAttribute('aria-pressed', isSelected ? 'true' : 'false');
+          tileEl.setAttribute('tabindex', '0');
+
+          // Status label & styling
+          let statusText = b.status || 'En Route';
+          let statusClass = 'status-en-route';
+          if (b.status === 'At Stop' || b.status === 'At Station') {
+            statusText = 'At Stop';
+            statusClass = 'status-at-stop';
+          } else if (b.status === 'Delayed' || b.delayMinutes > 5) {
+            statusText = 'Delayed';
+            statusClass = 'status-delayed';
+          } else {
+            statusText = 'En Route';
+            statusClass = 'status-en-route';
+          }
+
+          // Localize status
+          let localizedStatus = statusText;
+          if (lang === 'mr') {
+            localizedStatus = statusText === 'At Stop' ? 'स्थानकावर' : (statusText === 'Delayed' ? 'उशीर' : 'मार्गस्थ');
+          } else if (lang === 'hi') {
+            localizedStatus = statusText === 'At Stop' ? 'स्टॉप पर' : (statusText === 'Delayed' ? 'देरी' : 'मार्गस्थ');
+          }
+
+          // ETA text
+          let etaText = `${b.etaMinutes || 8} mins away`;
+          if (b.status === 'At Stop' || b.etaMinutes === 0) {
+            etaText = lang === 'mr' ? 'स्थानकावर' : (lang === 'hi' ? 'स्टॉप पर' : 'At Stop');
+          } else if (lang === 'mr') {
+            etaText = `${b.etaMinutes} मि. दूर`;
+          } else if (lang === 'hi') {
+            etaText = `${b.etaMinutes} मिनट दूर`;
+          }
+
+          const distKm = b.distanceFromStop || 6.3;
+          const speedKmH = b.speed || 48;
+          const metricsText = `${distKm} km • ${speedKmH} km/h`;
+
+          tileEl.innerHTML = `
+            <div class="bus-tile-left">
+              <div class="bus-tile-icon-box" aria-hidden="true">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M19 17h2V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v10h2"/>
+                  <circle cx="7" cy="17" r="2"/>
+                  <path d="M9 17h6"/>
+                  <circle cx="17" cy="17" r="2"/>
+                  <path d="M4 11h16"/>
+                  <path d="M4 7h16"/>
+                </svg>
+              </div>
+              <div class="bus-tile-info">
+                <div class="bus-tile-top-row">
+                  <span class="bus-tile-number">${b.number}</span>
+                  <span class="bus-tile-status-pill ${statusClass}">
+                    <span class="pill-dot"></span>
+                    <span>${localizedStatus}</span>
+                  </span>
+                </div>
+                <div class="bus-tile-route-name">${routeTitle}</div>
+              </div>
+            </div>
+            <div class="bus-tile-right">
+              <div class="bus-tile-eta">${etaText}</div>
+              <div class="bus-tile-metrics">${metricsText}</div>
+            </div>
+          `;
+
+          // TAP BUS INTERACTION - Instant in-place selection (NO page navigation)
+          tileEl.addEventListener('click', (e) => {
+            e.stopPropagation();
+            selectLiveTrackingBus(b);
+          });
+
+          tileEl.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              selectLiveTrackingBus(b);
+            }
+          });
+
+          busListEl.appendChild(tileEl);
+        });
+      }
+
+      bodyEl.appendChild(busListEl);
+      itemEl.appendChild(headerEl);
+      itemEl.appendChild(bodyEl);
+
+      // TAP ROUTE INTERACTION (Toggle accordion with smooth slide animation)
+      headerEl.addEventListener('click', () => {
+        const currentlyOpen = (state.expandedRouteId === route.id);
+        if (currentlyOpen) {
+          // Collapse
+          state.expandedRouteId = null;
+          itemEl.classList.remove('active');
+          headerEl.setAttribute('aria-expanded', 'false');
+        } else {
+          // Expand this route and collapse others
+          state.expandedRouteId = route.id;
+          container.querySelectorAll('.route-accordion-item').forEach(other => {
+            other.classList.remove('active');
+            const otherHeader = other.querySelector('.route-accordion-header');
+            if (otherHeader) otherHeader.setAttribute('aria-expanded', 'false');
+          });
+          itemEl.classList.add('active');
+          headerEl.setAttribute('aria-expanded', 'true');
+        }
+      });
+
+      headerEl.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          headerEl.click();
+        }
+      });
+
+      container.appendChild(itemEl);
+    });
+  }
+
+  // Select a bus directly from the accordion: update outline, map, and telemetry
+  function selectLiveTrackingBus(bus) {
+    if (!bus) return;
+    state.selectedBus = bus;
+
+    // 1. Update selection outline across bus tiles (only selected bus gets blue outline)
+    const allBusTiles = document.querySelectorAll('.bus-tile');
+    allBusTiles.forEach(tile => {
+      if (tile.dataset.busId === bus.id) {
+        tile.classList.add('selected');
+        tile.setAttribute('aria-pressed', 'true');
+      } else {
+        tile.classList.remove('selected');
+        tile.setAttribute('aria-pressed', 'false');
+      }
+    });
+
+    // 2. Ensure parent route accordion is expanded
+    const parentItem = document.querySelector(`.route-accordion-item[data-route-id="${bus.routeId}"]`);
+    if (parentItem && !parentItem.classList.contains('active')) {
+      state.expandedRouteId = bus.routeId;
+      document.querySelectorAll('.route-accordion-item').forEach(item => {
+        item.classList.remove('active');
+        const h = item.querySelector('.route-accordion-header');
+        if (h) h.setAttribute('aria-expanded', 'false');
+      });
+      parentItem.classList.add('active');
+      const h = parentItem.querySelector('.route-accordion-header');
+      if (h) h.setAttribute('aria-expanded', 'true');
+    }
+
+    // 3. Immediately update telemetry strip
+    const speedEl = document.getElementById('track-speed');
+    const distEl = document.getElementById('track-dist');
+    const etaEl = document.getElementById('track-eta');
+    const confEl = document.getElementById('track-confidence');
+    const bannerTitle = document.getElementById('map-banner-title');
+    const bannerSub = document.getElementById('map-banner-sub');
+
+    if (speedEl) speedEl.textContent = `${bus.speed || 48} km/h`;
+    if (distEl) distEl.textContent = `${bus.distanceFromStop || 6.3} km`;
+    if (etaEl) etaEl.textContent = `${bus.etaMinutes || 8} mins`;
+    if (confEl) confEl.textContent = `${bus.confidenceScore || 98}%`;
+
+    const nextStopName = bus.nextStop || (bus.intermediateStops && bus.intermediateStops[1] ? bus.intermediateStops[1].name : 'Next Stop');
+    if (bannerTitle) {
+      const prefix = state.currentLanguage === 'mr' ? 'कडे मार्गस्थ: ' : (state.currentLanguage === 'hi' ? 'की ओर अग्रसर: ' : 'En Route to ');
+      bannerTitle.textContent = `${prefix}${getShortRouteEndpoint(nextStopName)}`;
+    }
+    if (bannerSub) {
+      const awayStr = state.currentLanguage === 'mr' ? 'अंतर' : (state.currentLanguage === 'hi' ? 'दूरी' : 'away');
+      const minsStr = state.currentLanguage === 'mr' ? 'मि.' : (state.currentLanguage === 'hi' ? 'मिनट' : 'mins');
+      bannerSub.textContent = `${bus.distanceFromStop || 6.3} km ${awayStr} • ~${bus.etaMinutes || 8} ${minsStr} (${bus.speed || 48} km/h)`;
+    }
+
+    // 4. Update Trip Details Timeline
+    renderTripDetailsTimeline(bus);
+
+    // 5. Update Google Map with new bus position, route polyline, and camera bounds
+    initGoogleTrackingMap(bus, state.activeStop);
+  }
+
+  // Kept for backward compatibility
+  function renderMapBusChips() {}
 
   // Generate rich, clean on-click popup content for the circular bus icon
   function createBusPopupHtml(bus) {
@@ -3400,45 +3626,20 @@ document.addEventListener('DOMContentLoaded', () => {
     const stop = state.activeStop;
     if (!bus || !stop) return;
 
-    // Update Header Bus Badges
-    const badgeEl = document.getElementById('track-bus-badge');
-    if (badgeEl) {
-      badgeEl.textContent = bus.number;
-      badgeEl.style.backgroundColor = bus.badgeColor;
-    }
-
-    const numEl = document.getElementById('track-bus-number');
-    if (numEl) numEl.textContent = bus.number;
-
-    const routeEl = document.getElementById('track-bus-route');
-    if (routeEl) routeEl.textContent = getBusRouteName(bus);
-
-    const titleEl = document.getElementById('track-bus-route-title');
-    if (titleEl) titleEl.textContent = `${bus.origin} → ${getBusDestination(bus)}`;
-
-    const typeEl = document.getElementById('track-bus-type');
-    if (typeEl) typeEl.textContent = bus.type;
-
-    const occupancyEl = document.getElementById('track-bus-occupancy');
-    if (occupancyEl) {
-      occupancyEl.textContent = `${bus.occupancy} (${bus.occupancyPercent}%)`;
-      occupancyEl.className = `stat-val occ-${bus.occupancyClass}`;
-    }
+    // Render Dynamic Route & Bus Selector Accordion (Matches Reference Design)
+    renderLiveTrackingSelector();
 
     const speedEl = document.getElementById('track-speed');
-    if (speedEl) speedEl.textContent = `${bus.speed} km/h`;
+    if (speedEl) speedEl.textContent = `${bus.speed || 48} km/h`;
 
     const distEl = document.getElementById('track-dist');
-    if (distEl) distEl.textContent = `${bus.distanceFromStop} km`;
+    if (distEl) distEl.textContent = `${bus.distanceFromStop || 6.3} km`;
 
     const etaEl = document.getElementById('track-eta');
-    if (etaEl) etaEl.textContent = `${bus.etaMinutes} mins`;
+    if (etaEl) etaEl.textContent = `${bus.etaMinutes || 8} mins`;
 
     const confEl = document.getElementById('track-confidence');
-    if (confEl) confEl.textContent = `${bus.confidenceScore}%`;
-
-    const roadInfoEl = document.getElementById('track-bus-road-info');
-    if (roadInfoEl) roadInfoEl.textContent = `Via ${bus.via.split(',')[0]}`;
+    if (confEl) confEl.textContent = `${bus.confidenceScore || 98}%`;
 
     const voiceBtnLabel = document.getElementById('tracking-voice-btn-label');
     if (voiceBtnLabel && !state.isVoicePlaying) {
@@ -3448,9 +3649,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Render CITILINC/MSRTC Style Trip Overview & Vertical Timeline
     renderTripDetailsTimeline(bus);
-
-    // Quick chips
-    renderMapBusChips();
 
     // Initialize Google Maps Platform Live Tracking
     initGoogleTrackingMap(bus, stop);
@@ -3852,6 +4050,20 @@ document.addEventListener('DOMContentLoaded', () => {
         const awayStr = state.currentLanguage === 'mr' ? 'अंतर' : (state.currentLanguage === 'hi' ? 'दूरी' : 'away');
         const minsStr = state.currentLanguage === 'mr' ? 'मि.' : (state.currentLanguage === 'hi' ? 'मिनट' : 'mins');
         bannerSub.textContent = `${distToApproachingKm.toFixed(1)} km ${awayStr} • ~${etaMins} ${minsStr} (${simState.speedKmH} km/h)`;
+      }
+
+      // Live sync the selected bus tile inside the route accordion
+      const selectedTile = document.querySelector(`.bus-tile[data-bus-id="${bus.id}"]`);
+      if (selectedTile) {
+        const etaElTile = selectedTile.querySelector('.bus-tile-eta');
+        const metricsElTile = selectedTile.querySelector('.bus-tile-metrics');
+        if (etaElTile) {
+          const awayStr = state.currentLanguage === 'mr' ? 'मि. दूर' : (state.currentLanguage === 'hi' ? 'मिनट दूर' : 'mins away');
+          etaElTile.textContent = `${etaMins} ${awayStr}`;
+        }
+        if (metricsElTile) {
+          metricsElTile.textContent = `${distToApproachingKm.toFixed(1)} km • ${simState.speedKmH} km/h`;
+        }
       }
 
       // Auto-follow bus if enabled (Google Maps Turn-by-Turn Camera)

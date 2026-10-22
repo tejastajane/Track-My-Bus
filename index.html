@@ -549,41 +549,35 @@
            SCREEN 4: LIVE BUS TRACKING
            =================================================================== -->
       <section id="tracking-view" class="screen-view">
-        <div class="card tracking-header-card">
-          <div class="flex-between tracking-header-main">
-            <div>
-              <div class="flex-align gap-2 tracking-header-badges">
-                <span class="badge badge-blue">MSRTC Live GPS</span>
-                <span class="live-pill-dot"></span>
-              </div>
-              <h2 class="section-title" id="track-bus-number">MH 15 EG 4021</h2>
-              <div class="section-subtitle" id="track-bus-route">Nashik CBS to Yeola Bus Stand</div>
-            </div>
-            <div class="tracking-header-right">
-              <span class="freshness-tag live" id="track-bus-status-badge"><span class="freshness-dot"></span><span id="track-bus-status-text">Updated 12s ago · Live GPS</span></span>
-              <div class="text-sm text-primary tracking-road-info" id="track-bus-road-info">NH 753J Highway</div>
-              <button class="btn-tracking-voice-alert" id="btn-tracking-voice-alert" type="button" aria-label="Play Voice Announcement">
-                <svg class="voice-alert-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                  <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
-                  <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
-                  <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+        <!-- New Dynamic Route & Bus Selector Card (Matches Reference Design) -->
+        <div class="tracking-selector-card" id="tracking-selector-card">
+          <!-- Top Common Brand Meta Header: Shown only once -->
+          <div class="tracking-brand-header">
+            <div class="tracking-brand-left">
+              <div class="tracking-brand-bus-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M19 17h2V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v10h2"/>
+                  <circle cx="7" cy="17" r="2"/>
+                  <path d="M9 17h6"/>
+                  <circle cx="17" cy="17" r="2"/>
+                  <path d="M4 11h16"/>
+                  <path d="M4 7h16"/>
                 </svg>
-                <span class="voice-alert-label" id="tracking-voice-btn-label" data-i18n="voiceAlertBtn">Voice Alert</span>
-                <span class="voice-wave-indicator" aria-hidden="true">
-                  <span class="vw-bar"></span>
-                  <span class="vw-bar"></span>
-                  <span class="vw-bar"></span>
-                </span>
-              </button>
+              </div>
+              <span class="tracking-brand-title">MSRTC</span>
+              <span class="tracking-live-dot" aria-hidden="true"></span>
+              <span class="tracking-live-text">Live GPS</span>
             </div>
+            <!-- Preserved hooks for backwards compatibility / voice alert -->
+            <button class="btn-tracking-voice-alert" id="btn-tracking-voice-alert" type="button" aria-label="Play Voice Announcement" style="display: none;">
+              <span id="tracking-voice-btn-label">Voice Alert</span>
+            </button>
+            <span id="track-bus-status-badge" style="display: none;"><span id="track-bus-status-text">Live</span></span>
           </div>
 
-          <!-- Quick Bus Selector Chips on Map -->
-          <div class="map-bus-selector-row">
-            <span class="text-xs tracking-switch-label">Switch:</span>
-            <div class="map-bus-chips" id="map-bus-chips-container">
-              <!-- Dynamically rendered -->
-            </div>
+          <!-- Dynamic Accordions Container -->
+          <div class="route-accordions-container" id="tracking-routes-accordion">
+            <!-- Dynamically populated with routes & buses -->
           </div>
         </div>
 

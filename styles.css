@@ -1690,64 +1690,447 @@ body.dark-mode .stop-search-item:hover .stop-search-select-badge {
    SCREEN 4: LIVE MAP TRACKING
    -------------------------------------------------------------------------- */
 
-.tracking-header-card {
-  padding: 12px 14px;
+/* Live Tracking Route & Bus Selector Card (Matches Reference Design) */
+.tracking-selector-card {
+  padding: 14px 16px;
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-sm);
-  margin-bottom: 10px;
+  border-radius: 18px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
+  margin-bottom: 12px;
 }
 
-.tracking-header-main {
+body.dark-mode .tracking-selector-card {
+  background: var(--apple-card-bg-dark, #1E293B);
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+}
+
+.tracking-brand-header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  margin-bottom: 12px;
+  padding: 0 2px;
 }
 
-.tracking-header-badges {
-  margin-bottom: 3px;
+.tracking-brand-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.tracking-header-card .section-title {
-  font-size: 19px;
+.tracking-brand-bus-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: #3B82F6;
+  color: #FFFFFF;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 2px 6px rgba(59, 130, 246, 0.3);
+}
+
+.tracking-brand-title {
+  font-size: 15px;
   font-weight: 800;
-  color: var(--brand-dark);
+  color: #2563EB;
   letter-spacing: -0.2px;
-  line-height: 1.2;
 }
 
-body.dark-mode .tracking-header-card .section-title {
+body.dark-mode .tracking-brand-title {
+  color: #60A5FA;
+}
+
+.tracking-live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background-color: #16A34A;
+  margin: 0 2px;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.2);
+}
+
+.tracking-live-text {
+  font-size: 14px;
+  font-weight: 700;
+  color: #16A34A;
+}
+
+body.dark-mode .tracking-live-text {
+  color: #4ADE80;
+}
+
+/* Route Accordions List */
+.route-accordions-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.route-accordion-item {
+  flex-shrink: 0;
+  width: 100%;
+  box-sizing: border-box;
+  border-radius: 14px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-card);
+  transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+  overflow: hidden;
+}
+
+body.dark-mode .route-accordion-item {
+  background: rgba(30, 41, 59, 0.6);
+  border-color: rgba(255, 255, 255, 0.06);
+}
+
+.route-accordion-item.active {
+  background: #F8FAFC;
+  border-color: #BFDBFE;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.05);
+}
+
+body.dark-mode .route-accordion-item.active {
+  background: rgba(30, 41, 59, 0.95);
+  border-color: rgba(96, 165, 250, 0.3);
+}
+
+/* Accordion Header */
+.route-accordion-header {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  cursor: pointer;
+  user-select: none;
+  gap: 12px;
+  min-height: 56px;
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color 0.15s ease;
+}
+
+.route-accordion-header:hover {
+  background-color: rgba(0, 0, 0, 0.015);
+}
+
+body.dark-mode .route-accordion-header:hover {
+  background-color: rgba(255, 255, 255, 0.02);
+}
+
+.route-header-main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+}
+
+.route-icon-indicator {
+  width: 24px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: #64748B;
+  transition: color 0.2s ease;
+}
+
+.route-accordion-item.active .route-icon-indicator {
+  color: #2563EB;
+}
+
+body.dark-mode .route-accordion-item.active .route-icon-indicator {
+  color: #60A5FA;
+}
+
+.route-header-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.route-title {
+  font-size: 15.5px;
+  font-weight: 800;
+  color: var(--text-main);
+  letter-spacing: -0.2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.25;
+}
+
+body.dark-mode .route-title {
   color: #F8FAFC;
 }
 
-.tracking-header-card .section-subtitle {
-  font-size: 12px;
-  color: var(--text-secondary);
+.route-subtitle {
+  font-size: 12.5px;
   font-weight: 500;
-  margin-top: 1px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+  line-height: 1.2;
 }
 
-.tracking-header-right {
-  text-align: right;
+.route-chevron-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #F1F5F9;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #475569;
+  flex-shrink: 0;
+  transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1), background 0.2s ease, color 0.2s ease;
+  pointer-events: none;
+}
+
+body.dark-mode .route-chevron-btn {
+  background: rgba(255, 255, 255, 0.08);
+  color: #CBD5E1;
+}
+
+.route-accordion-item.active .route-chevron-btn {
+  transform: rotate(180deg);
+  background: #EFF6FF;
+  color: #2563EB;
+}
+
+body.dark-mode .route-accordion-item.active .route-chevron-btn {
+  background: rgba(37, 99, 235, 0.25);
+  color: #93C5FD;
+}
+
+/* Accordion Body */
+.route-accordion-body {
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: max-height 0.24s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s ease, padding 0.2s ease;
+  padding: 0 12px;
+}
+
+.route-accordion-item.active .route-accordion-body {
+  max-height: 900px;
+  opacity: 1;
+  padding: 4px 12px 14px 12px;
+}
+
+.bus-tiles-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+/* Bus Tile Card (Normal & Selected States) */
+.bus-tile {
+  flex-shrink: 0;
+  width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #FFFFFF;
+  border: 1px solid var(--border-subtle);
+  cursor: pointer;
+  transition: border 0.18s ease, box-shadow 0.18s ease, transform 0.15s ease, background 0.18s ease;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+body.dark-mode .bus-tile {
+  background: #1E293B;
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.bus-tile:hover {
+  border-color: #94A3B8;
+  transform: translateY(-1px);
+}
+
+body.dark-mode .bus-tile:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.bus-tile:active {
+  transform: scale(0.99);
+}
+
+/* SELECTED BUS STATE: Subtle crisp blue outline (no large checkmark) */
+.bus-tile.selected {
+  border: 1.5px solid #2563EB !important;
+  box-shadow: 0 0 0 1px #2563EB, 0 3px 12px rgba(37, 99, 235, 0.12) !important;
+  background: #FFFFFF !important;
+}
+
+body.dark-mode .bus-tile.selected {
+  border: 1.5px solid #3B82F6 !important;
+  box-shadow: 0 0 0 1px #3B82F6, 0 3px 14px rgba(59, 130, 246, 0.25) !important;
+  background: #1E293B !important;
+}
+
+.bus-tile-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+}
+
+.bus-tile-icon-box {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: #F1F5F9;
+  color: #1E293B;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
 }
 
-.tracking-road-info {
-  margin-top: 4px;
-  font-weight: 700;
-  font-size: 11px;
-  color: var(--primary-blue);
+body.dark-mode .bus-tile-icon-box {
+  background: rgba(255, 255, 255, 0.06);
+  color: #E2E8F0;
 }
 
-.tracking-switch-label {
-  font-size: 11px;
+.bus-tile-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.bus-tile-top-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.bus-tile-number {
+  font-size: 14.5px;
+  font-weight: 800;
+  color: var(--text-main);
+  letter-spacing: -0.1px;
+  line-height: 1.2;
+}
+
+body.dark-mode .bus-tile-number {
+  color: #F8FAFC;
+}
+
+.bus-tile-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2.5px 7px;
+  border-radius: 9999px;
+  font-size: 10.5px;
   font-weight: 700;
+  line-height: 1;
+}
+
+.bus-tile-status-pill.status-en-route {
+  background: #ECFDF5;
+  color: #059669;
+  border: 1px solid #A7F3D0;
+}
+
+body.dark-mode .bus-tile-status-pill.status-en-route {
+  background: rgba(5, 150, 105, 0.2);
+  color: #6EE7B7;
+  border-color: rgba(5, 150, 105, 0.4);
+}
+
+.bus-tile-status-pill.status-at-stop {
+  background: #EFF6FF;
+  color: #2563EB;
+  border: 1px solid #BFDBFE;
+}
+
+body.dark-mode .bus-tile-status-pill.status-at-stop {
+  background: rgba(37, 99, 235, 0.2);
+  color: #93C5FD;
+  border-color: rgba(37, 99, 235, 0.4);
+}
+
+.bus-tile-status-pill.status-delayed {
+  background: #FFFBEB;
+  color: #D97706;
+  border: 1px solid #FDE68A;
+}
+
+body.dark-mode .bus-tile-status-pill.status-delayed {
+  background: rgba(217, 119, 6, 0.2);
+  color: #FCD34D;
+  border-color: rgba(217, 119, 6, 0.4);
+}
+
+.bus-tile-status-pill .pill-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.bus-tile-route-name {
+  font-size: 12px;
   color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  margin-top: 3px;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.2;
+}
+
+.bus-tile-right {
+  text-align: right;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.bus-tile-eta {
+  font-size: 13.5px;
+  font-weight: 800;
+  color: #2563EB;
+  letter-spacing: -0.1px;
+  line-height: 1.2;
+}
+
+body.dark-mode .bus-tile-eta {
+  color: #60A5FA;
+}
+
+.bus-tile-metrics {
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-top: 3px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.route-empty-msg {
+  padding: 12px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-align: center;
+  font-style: italic;
 }
 
 .map-container-wrap {
@@ -1767,157 +2150,6 @@ body.dark-mode .tracking-header-card .section-title {
   min-height: 440px;
   position: relative;
   z-index: 1;
-}
-
-/* Quick Bus Switcher on Map */
-.map-bus-selector-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  overflow-x: auto;
-  padding: 6px 2px 4px 2px;
-  scrollbar-width: thin;
-  -webkit-overflow-scrolling: touch;
-}
-
-.map-bus-chips {
-  display: flex;
-  gap: 8px;
-  flex-wrap: nowrap;
-  align-items: center;
-}
-
-.map-bus-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 11px;
-  border-radius: var(--radius-full);
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-  font-family: inherit;
-  background-color: var(--bg-main);
-  border: 1.5px solid var(--border-subtle);
-  color: var(--text-secondary);
-}
-
-.map-bus-chip .chip-num {
-  font-weight: 700;
-  letter-spacing: 0.2px;
-}
-
-.map-bus-chip .chip-time {
-  font-size: 11px;
-  opacity: 0.9;
-  font-weight: 500;
-}
-
-.map-bus-chip .chip-status-tag {
-  font-size: 9.5px;
-  font-weight: 700;
-  padding: 2px 6px;
-  border-radius: 9999px;
-  text-transform: uppercase;
-  letter-spacing: 0.4px;
-}
-
-/* Upcoming Bus Style: Soft Emerald Green */
-.map-bus-chip.chip-upcoming {
-  background-color: #ECFDF5;
-  border: 1.5px solid #6EE7B7;
-  color: #065F46;
-}
-
-.map-bus-chip.chip-upcoming .chip-status-tag {
-  background-color: #D1FAE5;
-  color: #047857;
-  border: 1px solid #A7F3D0;
-}
-
-.map-bus-chip.chip-upcoming:hover {
-  background-color: #D1FAE5;
-  border-color: #10B981;
-  transform: translateY(-1px);
-  box-shadow: 0 3px 8px rgba(16, 185, 129, 0.2);
-}
-
-/* Passed Bus Style: Muted Lavender / Purple */
-.map-bus-chip.chip-passed {
-  background-color: #F5F3FF;
-  border: 1.5px solid #DDD6FE;
-  color: #5B21B6;
-  opacity: 0.88;
-}
-
-.map-bus-chip.chip-passed .chip-status-tag {
-  background-color: #EDE9FE;
-  color: #6D28D9;
-  border: 1px solid #C4B5FD;
-}
-
-.map-bus-chip.chip-passed:hover {
-  background-color: #EDE9FE;
-  border-color: #8B5CF6;
-  opacity: 1;
-  transform: translateY(-1px);
-  box-shadow: 0 3px 8px rgba(139, 92, 246, 0.2);
-}
-
-/* Active Bus Style: Solid Electric Primary Blue with Glow */
-.map-bus-chip.active {
-  background: linear-gradient(135deg, var(--primary-blue) 0%, var(--primary-blue-hover) 100%) !important;
-  color: #FFFFFF !important;
-  border: 1.5px solid var(--primary-blue-hover) !important;
-  opacity: 1 !important;
-  box-shadow: 0 3px 12px rgba(59, 130, 246, 0.35) !important;
-  transform: translateY(-1px);
-}
-
-.map-bus-chip.active .chip-num,
-.map-bus-chip.active .chip-time {
-  color: #FFFFFF !important;
-}
-
-.map-bus-chip.active .chip-status-tag {
-  background-color: rgba(255, 255, 255, 0.25) !important;
-  color: #FFFFFF !important;
-  border: 1px solid rgba(255, 255, 255, 0.4) !important;
-}
-
-/* Dark Mode Overrides for Quick Bus Chips */
-body.dark-mode .map-bus-chip.chip-upcoming {
-  background-color: rgba(6, 78, 59, 0.4);
-  border-color: #059669;
-  color: #A7F3D0;
-}
-
-body.dark-mode .map-bus-chip.chip-upcoming .chip-status-tag {
-  background-color: rgba(6, 95, 70, 0.6);
-  color: #6EE7B7;
-  border-color: #047857;
-}
-
-body.dark-mode .map-bus-chip.chip-passed {
-  background-color: rgba(76, 29, 149, 0.35);
-  border-color: #6D28D9;
-  color: #DDD6FE;
-}
-
-body.dark-mode .map-bus-chip.chip-passed .chip-status-tag {
-  background-color: rgba(91, 33, 182, 0.5);
-  color: #C4B5FD;
-  border-color: #7C3AED;
-}
-
-body.dark-mode .map-bus-chip.active {
-  background: linear-gradient(135deg, var(--primary-blue) 0%, var(--primary-blue-hover) 100%) !important;
-  border-color: #60A5FA !important;
-  color: #FFFFFF !important;
-  box-shadow: 0 3px 14px rgba(59, 130, 246, 0.5) !important;
 }
 
 /* Google Maps Style Top Live Route Banner */
