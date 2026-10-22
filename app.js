@@ -2116,14 +2116,10 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="route-row" tabindex="0" role="button" aria-expanded="${isExpanded}" aria-label="${escapeNearbyHtml(routeTitle)}">
           <div class="route-transit-icon" aria-hidden="true">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M8 6v6"/>
-              <path d="M16 6v6"/>
-              <path d="M4 12h16"/>
-              <rect x="4" y="3" width="16" height="15" rx="2"/>
-              <circle cx="8" cy="15" r="1" fill="currentColor"/>
-              <circle cx="16" cy="15" r="1" fill="currentColor"/>
-              <path d="M6 18v2"/>
-              <path d="M18 18v2"/>
+              <rect x="3" y="4" width="18" height="14" rx="2"/>
+              <path d="M7 18v2M17 18v2M3 10h18"/>
+              <circle cx="7.5" cy="14.5" r="1"/>
+              <circle cx="16.5" cy="14.5" r="1"/>
             </svg>
           </div>
           <div class="route-content">
