@@ -1194,9 +1194,10 @@ body.dark-mode #btn-splash-how-to-use:hover {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
+  gap: 10px;
   width: 100%;
-  max-width: 360px;
+  max-width: 460px;
+  flex-wrap: wrap;
 }
 
 .scanner-action-btn {

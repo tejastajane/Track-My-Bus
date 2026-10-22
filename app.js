@@ -6022,6 +6022,23 @@ document.addEventListener('DOMContentLoaded', () => {
   window.SmartST = window.WMB;
   window.TMB = window.WMB;
 
-  // Start on Splash Screen
-  navigateTo('splash-view');
+  // Handle URL ?stop= query parameter if scanned from external QR code or test link
+  const urlParams = new URLSearchParams(window.location.search);
+  const initialStopQuery = urlParams.get('stop');
+  if (initialStopQuery) {
+    const queryCode = initialStopQuery.trim();
+    const matchedStop = SMART_ST_DATA.busStops.find(s => {
+      if (s.id && s.id.toLowerCase() === queryCode.toLowerCase()) return true;
+      if (s.qrCode && s.qrCode.toLowerCase() === queryCode.toLowerCase()) return true;
+      if (s.name && s.name.toLowerCase().includes(queryCode.toLowerCase())) return true;
+      if (s.nameMr && s.nameMr.includes(queryCode)) return true;
+      return false;
+    }) || SMART_ST_DATA.busStops[0];
+
+    console.log('[WMB] Direct QR URL link detected. Opening stop:', matchedStop.name);
+    openLiveMapForStop(matchedStop);
+  } else {
+    // Start on Splash Screen
+    navigateTo('splash-view');
+  }
 });
