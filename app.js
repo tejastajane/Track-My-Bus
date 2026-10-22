@@ -2129,7 +2129,11 @@ document.addEventListener('DOMContentLoaded', () => {
           <div class="route-content">
             <div class="route-endpoints">
               <span class="route-name-text">${escapeNearbyHtml(firstStop)}</span>
-              <span class="route-to-separator">to</span>
+              <span class="route-arrow-icon" aria-hidden="true">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="9 18 15 12 9 6"/>
+                </svg>
+              </span>
               <span class="route-name-text">${escapeNearbyHtml(lastStop)}</span>
             </div>
           </div>

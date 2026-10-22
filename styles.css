@@ -5211,10 +5211,14 @@ body.dark-mode .route-transit-icon {
   color: var(--text-primary);
 }
 
-.route-to-separator {
+.route-arrow-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   color: var(--text-secondary);
-  font-weight: 400;
-  font-size: 14px;
+  opacity: 0.55;
+  flex-shrink: 0;
+  margin: 0 1px;
 }
 
 .route-trailing {
