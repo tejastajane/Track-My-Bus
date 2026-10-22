@@ -198,13 +198,16 @@ document.addEventListener('DOMContentLoaded', () => {
       window.scrollTo(0, 0);
     }
 
-    // Contextual Header Management: Home vs Child screens
+    // Contextual Header Management: 5 Main Navigation screens vs Child screens
     const brandSection = document.getElementById('header-brand-section');
     const childNav = document.getElementById('header-child-nav');
     const contextTitle = document.getElementById('header-context-title');
 
+    // The 5 main navigation pages (Home, Live Map, Scan QR, Planner, Account) show the main brand title bar
+    const mainNavScreens = ['home-view', 'tracking-view', 'scanner-view', 'planner-view', 'account-view', 'splash-view'];
+
     if (brandSection && childNav && contextTitle) {
-      if (screenId === 'home-view' || screenId === 'splash-view') {
+      if (mainNavScreens.includes(screenId)) {
         brandSection.style.display = 'flex';
         childNav.style.display = 'none';
       } else {
@@ -213,13 +216,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const dict = SMART_ST_DATA.i18n[state.currentLanguage] || SMART_ST_DATA.i18n.en;
         const titles = {
-          'tracking-view': (state.selectedBus ? `${state.selectedBus.id.replace('BUS-', 'Bus ')} · Live Tracking` : 'Live Bus Tracking'),
           'routes-view': dict.navRoutes ? `${dict.navRoutes} & Timetable` : 'Bus Routes & Timetable',
           'stop-view': dict.navRoutes ? `${dict.navRoutes} & Stops` : 'Bus Routes & Stops',
           'stop-info-view': (state.activeStop ? getStopDisplayName(state.activeStop) : 'Bus Stop Details'),
           'nearby-stops-view': dict.navNearby ? `${dict.navNearby} Bus Stops` : 'Nearby Bus Stops',
-          'scanner-view': dict.navScanner || 'Scan Bus Stop QR',
-          'account-view': dict.navAccount ? `${dict.navAccount} & Passes` : 'My Account & Passes',
           'bus-details-view': 'Bus Route Details',
           'schedule-view': dict.btnTimeTable || 'Timetable & Schedule',
           'community-view': dict.navReports || 'Community Reports',
@@ -457,8 +457,49 @@ document.addEventListener('DOMContentLoaded', () => {
       } catch(e) {}
       state.currentAudio = null;
     }
+    if ('speechSynthesis' in window) {
+      try {
+        window.speechSynthesis.cancel();
+      } catch(e) {}
+    }
     state.isVoicePlaying = false;
     setLiveMapVoiceUIState('idle');
+  }
+
+  function playNativeSpeechFallback(text, lang, dict) {
+    if (!('speechSynthesis' in window)) {
+      setLiveMapVoiceUIState('idle');
+      state.isVoicePlaying = false;
+      showToast(dict.voiceAlertError || 'Voice alert is currently unavailable.');
+      return;
+    }
+    try {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      if (lang === 'mr') utterance.lang = 'mr-IN';
+      else if (lang === 'hi') utterance.lang = 'hi-IN';
+      else utterance.lang = 'en-IN';
+      utterance.rate = 0.95;
+
+      setLiveMapVoiceUIState('playing');
+      showToast(dict.voiceAlertPlaying || 'Announcing Bus Arrival...');
+
+      utterance.onend = () => {
+        setLiveMapVoiceUIState('idle');
+        state.isVoicePlaying = false;
+      };
+      utterance.onerror = () => {
+        setLiveMapVoiceUIState('idle');
+        state.isVoicePlaying = false;
+        showToast(dict.voiceAlertError || 'Voice alert error.');
+      };
+
+      window.speechSynthesis.speak(utterance);
+    } catch (e) {
+      setLiveMapVoiceUIState('idle');
+      state.isVoicePlaying = false;
+      showToast(dict.voiceAlertError || 'Voice alert error.');
+    }
   }
 
   async function playLiveMapVoiceAlert() {
@@ -467,12 +508,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // If currently playing, clicking toggles off
     if (state.isVoicePlaying) {
       stopAllAudio();
-      return;
-    }
-
-    // Fast offline check
-    if (!navigator.onLine) {
-      showToast(dict.voiceAlertOffline || 'You are offline. Voice alerts require an internet connection.');
       return;
     }
 
@@ -493,34 +528,40 @@ document.addEventListener('DOMContentLoaded', () => {
       text = `Bus ${busNum} approaching station.`;
     }
 
+    // Fast offline fallback to device synthesis
+    if (!navigator.onLine) {
+      playNativeSpeechFallback(text, lang, dict);
+      return;
+    }
+
     setLiveMapVoiceUIState('generating');
 
     try {
+      const controller = new AbortController();
+      const timeoutTimer = setTimeout(() => controller.abort(), 18000);
+
       const res = await fetch('/api/tts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
         body: JSON.stringify({
           text: text,
           lang: lang,
           busId: bus.id || bus.busNumber || 'default'
         })
       });
+      clearTimeout(timeoutTimer);
 
       if (!res.ok) {
-        const errJson = await res.json().catch(() => ({}));
-        setLiveMapVoiceUIState('idle');
-        if (errJson.error === 'KEY_NOT_CONFIGURED') {
-          showToast(dict.voiceAlertServerKeyNeeded || 'Server requires GEMINI_API_KEY to generate audio.');
-        } else {
-          showToast(dict.voiceAlertError || 'Voice alert is currently unavailable.');
-        }
+        console.warn('[Gemini TTS] Endpoint returned status', res.status, 'falling back to device speech');
+        playNativeSpeechFallback(text, lang, dict);
         return;
       }
 
       const blob = await res.blob();
       if (!blob || blob.size < 50) {
-        setLiveMapVoiceUIState('idle');
-        showToast(dict.voiceAlertError || 'Voice alert is currently unavailable.');
+        console.warn('[Gemini TTS] Empty or short audio received, falling back to device speech');
+        playNativeSpeechFallback(text, lang, dict);
         return;
       }
 
@@ -537,24 +578,18 @@ document.addEventListener('DOMContentLoaded', () => {
         state.isVoicePlaying = false;
       };
 
-      audio.onerror = () => {
+      audio.onerror = (e) => {
+        console.warn('[Gemini TTS Audio Error, falling back to device speech]', e);
         setLiveMapVoiceUIState('idle');
         URL.revokeObjectURL(audioUrl);
         state.currentAudio = null;
-        state.isVoicePlaying = false;
-        showToast(dict.voiceAlertError || 'Voice alert error.');
+        playNativeSpeechFallback(text, lang, dict);
       };
 
       await audio.play();
     } catch (err) {
-      console.warn('[Live Map Voice Alert Error]', err);
-      setLiveMapVoiceUIState('idle');
-      state.isVoicePlaying = false;
-      if (!navigator.onLine) {
-        showToast(dict.voiceAlertOffline || 'You are offline. Voice alerts require an internet connection.');
-      } else {
-        showToast(dict.voiceAlertError || 'Voice alert is currently unavailable.');
-      }
+      console.warn('[Live Map Voice Alert Error, falling back]', err);
+      playNativeSpeechFallback(text, lang, dict);
     }
   }
 
@@ -1489,14 +1524,23 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // --------------------------------------------------------------------------
-  // Dedicated Nearby Bus Stops Screen (Live GPS Precision & Arrivals)
+  // Dedicated Nearby Bus Stops Screen (Apple HIG Minimal Transit Design)
   // --------------------------------------------------------------------------
 
   const nearbyPageState = {
-    selectedRadius: 'all',
     searchQuery: '',
     isInitialized: false
   };
+
+  function escapeNearbyHtml(str) {
+    if (typeof str !== 'string') return '';
+    return str
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
 
   function setupNearbyStopsScreen() {
     if (nearbyPageState.isInitialized) return;
@@ -1504,14 +1548,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const searchInput = document.getElementById('nearby-page-search-input');
     const clearBtn = document.getElementById('btn-clear-nearby-search');
-    const refreshBtn = document.getElementById('btn-nearby-page-refresh');
-    const radiusPillsContainer = document.getElementById('nearby-radius-pills');
 
     if (searchInput) {
       searchInput.addEventListener('input', (e) => {
         nearbyPageState.searchQuery = (e.target.value || '').trim().toLowerCase();
         if (clearBtn) {
-          clearBtn.style.display = nearbyPageState.searchQuery ? 'block' : 'none';
+          clearBtn.style.display = nearbyPageState.searchQuery ? 'flex' : 'none';
         }
         renderNearbyStopsCards();
       });
@@ -1519,66 +1561,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (clearBtn) {
       clearBtn.addEventListener('click', () => {
-        if (searchInput) searchInput.value = '';
+        if (searchInput) {
+          searchInput.value = '';
+          searchInput.focus();
+        }
         nearbyPageState.searchQuery = '';
         clearBtn.style.display = 'none';
         renderNearbyStopsCards();
-      });
-    }
-
-    if (radiusPillsContainer) {
-      radiusPillsContainer.addEventListener('click', (e) => {
-        const pill = e.target.closest('.nearby-radius-pill');
-        if (!pill) return;
-        radiusPillsContainer.querySelectorAll('.nearby-radius-pill').forEach(p => p.classList.remove('active'));
-        pill.classList.add('active');
-        nearbyPageState.selectedRadius = pill.dataset.radius || 'all';
-        renderNearbyStopsCards();
-      });
-    }
-
-    if (refreshBtn) {
-      refreshBtn.addEventListener('click', () => {
-        showToast('Acquiring live GPS coordinates...');
-        refreshBtn.disabled = true;
-        refreshBtn.style.opacity = '0.6';
-        requestUserGpsLocation(
-          pos => {
-            refreshBtn.disabled = false;
-            refreshBtn.style.opacity = '1';
-            showToast('Updated nearby stops with live GPS location!');
-            renderNearbyStopsScreen();
-            renderHomeNearbyStopCard();
-          },
-          err => {
-            refreshBtn.disabled = false;
-            refreshBtn.style.opacity = '1';
-            showToast('Could not acquire GPS coordinates. Showing regional stops.');
-            renderNearbyStopsScreen();
-          }
-        );
       });
     }
   }
 
   function renderNearbyStopsScreen() {
     setupNearbyStopsScreen();
-
-    // Update GPS status banner
-    const gpsStatusEl = document.getElementById('nearby-page-gps-status');
-    if (gpsStatusEl) {
-      if (state.isAccurateGps && state.userCoords) {
-        gpsStatusEl.textContent = `● Live GPS (±${Math.round(state.userCoords.accuracy || 10)}m)`;
-        gpsStatusEl.classList.add('gps-active');
-      } else if (state.isCoarseNetwork) {
-        gpsStatusEl.textContent = '● Regional Network (IP)';
-        gpsStatusEl.classList.remove('gps-active');
-      } else {
-        gpsStatusEl.textContent = '● Regional Network';
-        gpsStatusEl.classList.remove('gps-active');
-      }
-    }
-
     renderNearbyStopsCards();
   }
 
@@ -1586,99 +1581,53 @@ document.addEventListener('DOMContentLoaded', () => {
     const container = document.getElementById('nearby-page-cards-container');
     if (!container) return;
 
-    // Fetch all stops sorted by GPS distance
+    // Fetch candidate stops sorted by distance
     const sortedStops = getSortedNearbyStops(50);
     const q = nearbyPageState.searchQuery;
-    const rad = nearbyPageState.selectedRadius;
 
-    // Filter by radius & search query
+    // Filter by search query
     const filteredStops = sortedStops.filter(item => {
       const st = item.stop;
-      const dKm = item.distKm;
+      if (!st) return false;
+      if (!q) return true;
 
-      // Radius filter
-      if (rad !== 'all') {
-        const maxDist = parseFloat(rad);
-        if (!isNaN(maxDist) && dKm > maxDist) return false;
-      }
-
-      // Query filter
-      if (q) {
-        const nameMatch = (st.name || '').toLowerCase().includes(q);
-        const nameMrMatch = (st.nameMr || '').toLowerCase().includes(q);
-        const idMatch = (st.id || '').toLowerCase().includes(q);
-        const busMatch = item.upcomingBus && (
-          (item.upcomingBus.to || '').toLowerCase().includes(q) ||
-          (item.upcomingBus.number || '').toLowerCase().includes(q)
-        );
-        if (!nameMatch && !nameMrMatch && !idMatch && !busMatch) return false;
-      }
-
-      return true;
+      const nameMatch = (st.name || '').toLowerCase().includes(q);
+      const nameMrMatch = (st.nameMr || '').toLowerCase().includes(q);
+      const idMatch = (st.id || '').toLowerCase().includes(q);
+      const busMatch = item.upcomingBus && (
+        (item.upcomingBus.to || '').toLowerCase().includes(q) ||
+        (item.upcomingBus.number || '').toLowerCase().includes(q)
+      );
+      return nameMatch || nameMrMatch || idMatch || busMatch;
     });
 
-    // Narrow down to 6 nearest stops
-    const displayStops = filteredStops.slice(0, 6);
+    // Display nearest stops (up to 10 for clean scannable Apple list)
+    const displayStops = filteredStops.slice(0, 10);
 
-    // Update Stats Bar
-    const statCount = document.getElementById('nearby-stat-count');
-    const statNearest = document.getElementById('nearby-stat-nearest');
-    const statWalking = document.getElementById('nearby-stat-walking');
-
-    if (statCount) statCount.textContent = displayStops.length;
-    if (statNearest) {
-      if (displayStops.length > 0) {
-        const d = displayStops[0].distKm;
-        statNearest.textContent = d < 1 ? `${Math.round(d * 1000)} m` : `${d.toFixed(1)} km`;
-      } else {
-        statNearest.textContent = '--';
-      }
-    }
-    if (statWalking) {
-      if (displayStops.length > 0) {
-        const wMin = Math.max(1, Math.round(displayStops[0].distKm * 12));
-        statWalking.textContent = `~${wMin} min`;
-      } else {
-        statWalking.textContent = '--';
-      }
-    }
-
-    // Render Cards
     container.innerHTML = '';
 
     if (displayStops.length === 0) {
       container.innerHTML = `
-        <div class="card nearby-empty-card">
-          <div class="nearby-empty-icon">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <div class="nearby-empty-state">
+          <div class="nearby-empty-icon" aria-hidden="true">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <circle cx="11" cy="11" r="8"></circle>
               <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
             </svg>
           </div>
-          <h4 class="nearby-empty-title">No bus stops found</h4>
-          <p class="nearby-empty-text">
-            ${q ? `No stops matching "<strong>${q}</strong>" within ${rad === 'all' ? 'the active network' : rad + ' km'}.` : 'No stops found within selected radius.'}
-          </p>
-          <button class="btn btn-secondary btn-sm" id="btn-nearby-reset-filters" type="button">
-            Reset Filters
-          </button>
+          <h3 class="nearby-empty-title">No stops found</h3>
+          <p class="nearby-empty-subtitle">${q ? `No stops matching &ldquo;${escapeNearbyHtml(q)}&rdquo;` : 'No bus stops available in this area.'}</p>
+          ${q ? `<button type="button" class="nearby-empty-reset-btn" id="btn-nearby-reset-search">Clear Search</button>` : ''}
         </div>
       `;
-      const resetBtn = document.getElementById('btn-nearby-reset-filters');
+      const resetBtn = document.getElementById('btn-nearby-reset-search');
       if (resetBtn) {
         resetBtn.addEventListener('click', () => {
           const searchInput = document.getElementById('nearby-page-search-input');
-          if (searchInput) searchInput.value = '';
-          nearbyPageState.searchQuery = '';
-          nearbyPageState.selectedRadius = 'all';
-          const pills = document.getElementById('nearby-radius-pills');
-          if (pills) {
-            pills.querySelectorAll('.nearby-radius-pill').forEach(p => {
-              p.classList.toggle('active', p.dataset.radius === 'all');
-            });
-          }
           const clearBtn = document.getElementById('btn-clear-nearby-search');
+          if (searchInput) searchInput.value = '';
           if (clearBtn) clearBtn.style.display = 'none';
+          nearbyPageState.searchQuery = '';
           renderNearbyStopsCards();
         });
       }
@@ -1688,117 +1637,53 @@ document.addEventListener('DOMContentLoaded', () => {
     displayStops.forEach(item => {
       const st = item.stop;
       const dKm = item.distKm;
-      const distStr = dKm < 1 ? `${Math.round(dKm * 1000)} m away` : `${dKm.toFixed(1)} km away`;
+      const distStr = dKm < 1 ? `${Math.round(dKm * 1000)} m` : `${dKm.toFixed(1)} km`;
       const walkMins = Math.max(1, Math.round(dKm * 12));
-      const upBus = item.upcomingBus;
 
-      const card = document.createElement('div');
-      card.className = 'card nearby-stop-rich-card';
-      card.setAttribute('data-stop-id', st.id || st.name);
+      const row = document.createElement('div');
+      row.className = 'nearby-stop-row';
+      row.setAttribute('role', 'listitem');
+      row.setAttribute('tabindex', '0');
+      row.setAttribute('aria-label', `${getStopDisplayName(st)}, ${distStr} away`);
 
-      let upcomingHtml = '';
-      if (upBus && item.isUpcoming) {
-        const busDest = getBusDestination(upBus);
-        upcomingHtml = `
-          <div class="nearby-card-bus-preview">
-            <div class="nearby-preview-left">
-              <div class="nearby-preview-badge">
-                <span class="pulse-dot"></span>
-                <span>${upBus.type || 'Ordinary'} • ${upBus.number || upBus.id}</span>
-              </div>
-              <div class="nearby-preview-dest">
-                <span class="nearby-preview-arrow"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:middle;"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg></span> Towards <strong>${busDest}</strong>
-              </div>
-            </div>
-            <div class="nearby-preview-right">
-              <span class="nearby-preview-eta"><span class="pulse-dot"></span>${item.etaMinutes} min</span>
-              <span class="nearby-preview-status">On Time</span>
-            </div>
-          </div>
-        `;
-      } else if (upBus) {
-        upcomingHtml = `
-          <div class="nearby-card-bus-preview scheduled">
-            <div class="nearby-preview-left">
-              <div class="nearby-preview-badge secondary">
-                <span>${upBus.type || 'Ordinary'} • ${upBus.number || upBus.id}</span>
-              </div>
-              <div class="nearby-preview-dest">
-                Towards <strong>${getBusDestination(upBus)}</strong>
-              </div>
-            </div>
-            <div class="nearby-preview-right">
-              <span class="nearby-preview-eta secondary">Scheduled</span>
-            </div>
-          </div>
-        `;
-      } else {
-        upcomingHtml = `
-          <div class="nearby-card-bus-preview empty">
-            <div class="nearby-preview-empty-text">No active buses currently scheduled</div>
-          </div>
-        `;
-      }
-
-      card.innerHTML = `
-        <div class="nearby-card-header">
-          <div class="nearby-card-title-group">
-            <div class="nearby-card-icon-stop">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
-            </div>
-            <div>
-              <div class="flex-align gap-2">
-                <h3 class="nearby-card-title">${getStopDisplayName(st)}</h3>
-                <span class="nearby-card-code-pill">${st.id || 'ST'}</span>
-              </div>
-              ${st.nameMr ? `<div class="nearby-card-marathi">${st.nameMr}</div>` : ''}
-            </div>
-          </div>
-          <div class="nearby-card-distance-box">
-            <span class="nearby-card-dist-pill"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5"/></svg> ${distStr}</span>
-            <span class="nearby-card-walk-pill"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> ~${walkMins} min</span>
+      row.innerHTML = `
+        <div class="nearby-stop-icon-wrap" aria-hidden="true">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="4" width="18" height="14" rx="2"/>
+            <path d="M7 18v2M17 18v2M3 10h18"/>
+            <circle cx="7.5" cy="14.5" r="1"/>
+            <circle cx="16.5" cy="14.5" r="1"/>
+          </svg>
+        </div>
+        <div class="nearby-stop-content">
+          <div class="nearby-stop-name">${escapeNearbyHtml(getStopDisplayName(st))}</div>
+          <div class="nearby-stop-sub">
+            <span>${distStr}</span>
+            <span class="nearby-stop-meta-dot" aria-hidden="true">·</span>
+            <span>~${walkMins} min walk</span>
           </div>
         </div>
-
-        ${upcomingHtml}
-
-        <div class="nearby-card-footer">
-          <button class="btn btn-primary btn-sm btn-nearby-live-map" type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 6px;">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>
-            <span>Live Map</span>
-            <span>&rarr;</span>
-          </button>
-          <button class="btn btn-secondary btn-sm btn-nearby-timetable" type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 6px;">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-            <span>Routes & Times</span>
-          </button>
+        <div class="nearby-stop-trailing">
+          <span class="nearby-disclosure-chevron" aria-hidden="true">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="9 18 15 12 9 6"/>
+            </svg>
+          </span>
         </div>
       `;
 
-      // Live map button & card click: openLiveMapForStop
-      const liveMapBtn = card.querySelector('.btn-nearby-live-map');
-      if (liveMapBtn) {
-        liveMapBtn.onclick = (e) => {
-          e.stopPropagation();
-          openLiveMapForStop(st);
-        };
-      }
-
-      const timetableBtn = card.querySelector('.btn-nearby-timetable');
-      if (timetableBtn) {
-        timetableBtn.onclick = (e) => {
-          e.stopPropagation();
-          state.activeStop = st;
-          state.hasUserSelectedStop = true;
-          navigateTo('routes-view');
-        };
-      }
-
-      card.onclick = () => {
+      // Row click or keyboard Enter: open live map for stop
+      row.addEventListener('click', () => {
         openLiveMapForStop(st);
-      };
+      });
+      row.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          openLiveMapForStop(st);
+        }
+      });
 
-      container.appendChild(card);
+      container.appendChild(row);
     });
   }
 
@@ -4368,31 +4253,197 @@ document.addEventListener('DOMContentLoaded', () => {
   function setupJourneyPlanner() {
     const originInput = document.getElementById('journey-origin-input');
     const destInput = document.getElementById('journey-dest-input');
+    const originDropdown = document.getElementById('journey-origin-dropdown');
+    const destDropdown = document.getElementById('journey-dest-dropdown');
     const searchBtn = document.getElementById('btn-search-journey');
     const resultsContainer = document.getElementById('journey-results-container');
     const chipBtns = document.querySelectorAll('.btn-planner-chip');
 
     if (!searchBtn || !destInput) return;
 
-    // Set default origin placeholder if empty
-    function syncOriginPlaceholder() {
-      if (originInput && !originInput.value) {
-        const cur = state.activeStop || (SMART_ST_DATA.busStops && SMART_ST_DATA.busStops[0]);
-        if (cur) originInput.placeholder = `From: ${getStopDisplayName(cur)} (Current)`;
+    // Autocomplete dropdown handler for From & To inputs
+    function setupAutocomplete(input, dropdown, onSelect) {
+      if (!input || !dropdown) return;
+
+      let selectedIndex = -1;
+
+      function renderList(query) {
+        const allStops = SMART_ST_DATA.busStops || [];
+        const cleanQ = (query || '').trim().toLowerCase();
+        let matched = [];
+
+        if (!cleanQ) {
+          // Show popular hubs when empty or on focus
+          const priorityNames = [
+            'Nashik CBS', 'Yeola Bus Stand', 'Pune', 'Lasalgaon', 'Kopargaon', 
+            'Shirdi', 'Dhule', 'Mumbai Dadar', 'Sinnar', 'Manmad', 'Malegaon', 'Sangamner'
+          ];
+          matched = priorityNames.map(pName => {
+            return allStops.find(s => s.name && s.name.toLowerCase().includes(pName.toLowerCase()));
+          }).filter(Boolean);
+
+          if (matched.length < 6) {
+            allStops.slice(0, 10).forEach(s => {
+              if (!matched.some(m => m.id === s.id)) matched.push(s);
+            });
+          }
+        } else {
+          // Filter matching stops
+          const startsWith = [];
+          const contains = [];
+
+          allStops.forEach(s => {
+            const nameEn = (s.name || '').toLowerCase();
+            const nameMr = s.nameMr || '';
+            const nameHi = s.nameHi || '';
+            const taluka = (s.taluka || '').toLowerCase();
+            const district = (s.district || '').toLowerCase();
+            const village = (s.village || '').toLowerCase();
+
+            if (nameEn.startsWith(cleanQ) || nameMr.startsWith(cleanQ) || nameHi.startsWith(cleanQ)) {
+              startsWith.push(s);
+            } else if (
+              nameEn.includes(cleanQ) ||
+              nameMr.includes(cleanQ) ||
+              nameHi.includes(cleanQ) ||
+              taluka.includes(cleanQ) ||
+              district.includes(cleanQ) ||
+              village.includes(cleanQ)
+            ) {
+              contains.push(s);
+            }
+          });
+
+          matched = [...startsWith, ...contains].slice(0, 10);
+        }
+
+        if (matched.length === 0) {
+          dropdown.innerHTML = `
+            <div class="planner-dropdown-empty">
+              No bus stops found matching "<strong>${cleanQ.replace(/</g, '&lt;')}</strong>"
+            </div>
+          `;
+          dropdown.style.display = 'flex';
+          return;
+        }
+
+        let html = '';
+        matched.forEach((stop, idx) => {
+          const dispName = getStopDisplayName(stop);
+          const division = stop.district || stop.taluka || 'Maharashtra';
+          const altName = state.currentLanguage !== 'mr' && stop.nameMr ? stop.nameMr : (stop.village || stop.taluka || '');
+          const subText = altName ? `${altName} • ${division}` : division;
+
+          html += `
+            <div class="planner-dropdown-item" data-stop-name="${dispName.replace(/"/g, '&quot;')}" data-stop-id="${stop.id}" data-index="${idx}">
+              <span class="planner-dropdown-icon" aria-hidden="true">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>
+                  <circle cx="12" cy="9" r="2.5"/>
+                </svg>
+              </span>
+              <div class="planner-dropdown-info">
+                <div class="planner-dropdown-name">${dispName}</div>
+                <div class="planner-dropdown-sub">${subText}</div>
+              </div>
+            </div>
+          `;
+        });
+
+        dropdown.innerHTML = html;
+        dropdown.style.display = 'flex';
+        selectedIndex = -1;
+
+        // Attach click listeners
+        dropdown.querySelectorAll('.planner-dropdown-item').forEach(item => {
+          item.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const stopName = item.dataset.stopName;
+            input.value = stopName;
+            dropdown.style.display = 'none';
+            if (onSelect) onSelect(stopName, item.dataset.stopId);
+          });
+        });
       }
+
+      input.addEventListener('input', () => {
+        renderList(input.value);
+      });
+
+      input.addEventListener('focus', () => {
+        renderList(input.value);
+      });
+
+      input.addEventListener('keydown', (e) => {
+        const items = dropdown.querySelectorAll('.planner-dropdown-item');
+        if (dropdown.style.display === 'flex' && items.length > 0) {
+          if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            selectedIndex = (selectedIndex + 1) % items.length;
+            items.forEach((it, i) => it.classList.toggle('is-selected', i === selectedIndex));
+            items[selectedIndex].scrollIntoView({ block: 'nearest' });
+            return;
+          }
+          if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            selectedIndex = (selectedIndex - 1 + items.length) % items.length;
+            items.forEach((it, i) => it.classList.toggle('is-selected', i === selectedIndex));
+            items[selectedIndex].scrollIntoView({ block: 'nearest' });
+            return;
+          }
+          if (e.key === 'Enter') {
+            if (selectedIndex >= 0 && selectedIndex < items.length) {
+              e.preventDefault();
+              items[selectedIndex].click();
+              return;
+            }
+          }
+          if (e.key === 'Escape') {
+            dropdown.style.display = 'none';
+            return;
+          }
+        }
+        if (e.key === 'Enter') {
+          dropdown.style.display = 'none';
+          executeJourneySearch();
+        }
+      });
     }
-    syncOriginPlaceholder();
+
+    // Initialize autocomplete on both tabs
+    setupAutocomplete(originInput, originDropdown, (stopName) => {
+      if (destInput && !destInput.value) {
+        destInput.focus();
+      }
+    });
+
+    setupAutocomplete(destInput, destDropdown, (stopName) => {
+      // Destination selected
+    });
+
+    // Close dropdowns on click outside
+    document.addEventListener('click', (e) => {
+      if (originDropdown && !e.target.closest('#journey-origin-input') && !e.target.closest('#journey-origin-dropdown')) {
+        originDropdown.style.display = 'none';
+      }
+      if (destDropdown && !e.target.closest('#journey-dest-input') && !e.target.closest('#journey-dest-dropdown')) {
+        destDropdown.style.display = 'none';
+      }
+    });
 
     // Chip click handlers
     chipBtns.forEach(btn => {
       btn.addEventListener('click', () => {
         const dest = btn.dataset.dest || btn.textContent.trim();
         destInput.value = dest;
+        if (destDropdown) destDropdown.style.display = 'none';
         executeJourneySearch();
       });
     });
 
     searchBtn.addEventListener('click', () => {
+      if (originDropdown) originDropdown.style.display = 'none';
+      if (destDropdown) destDropdown.style.display = 'none';
       executeJourneySearch();
     });
 
@@ -5882,11 +5933,11 @@ document.addEventListener('DOMContentLoaded', () => {
         closeModal('ticket-booking-modal');
         navigateTo('planner-view');
         setTimeout(() => {
-          const originInp = document.getElementById('planner-origin');
-          const destInp = document.getElementById('planner-dest');
+          const originInp = document.getElementById('journey-origin-input') || document.getElementById('planner-origin');
+          const destInp = document.getElementById('journey-dest-input') || document.getElementById('planner-dest');
           if (originInp && fromVal) originInp.value = fromVal;
           if (destInp && toVal) destInp.value = toVal;
-          const planBtn = document.getElementById('btn-plan-journey');
+          const planBtn = document.getElementById('btn-search-journey') || document.getElementById('btn-plan-journey');
           if (planBtn) planBtn.click();
         }, 200);
       });
