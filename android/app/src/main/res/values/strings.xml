@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Track My Bus</string>
+    <string name="title_activity_main">Track My Bus</string>
+    <string name="package_name">com.trackmybus.app</string>
+    <string name="custom_url_scheme">com.trackmybus.app</string>
+</resources>

@@ -1,0 +1,16 @@
+{
+  "name": "where-s-my-bus",
+  "version": "1.0.0",
+  "description": "Track My Bus — Live Bus Tracking",
+  "private": true,
+  "scripts": {
+    "prepare-assets": "node sync-assets.js",
+    "cap:sync": "node sync-assets.js && npx cap sync",
+    "build:apk": "node sync-assets.js && npx cap sync android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.2.2",
+    "@capacitor/cli": "^6.2.2",
+    "@capacitor/core": "^6.2.2"
+  }
+}

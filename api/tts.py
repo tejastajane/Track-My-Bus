@@ -60,46 +60,61 @@ def pcm_to_wav(pcm_bytes, sample_rate=24000, num_channels=1, bit_depth=16):
 
 def call_gemini_tts(text, lang, api_key):
     prompt_prefix = "Make a clear, official bus station arrival announcement: "
+    lang_code = "en-IN"
     if lang == "mr":
         prompt_prefix = "Make a clear, official bus station public arrival announcement in clear Marathi: "
+        lang_code = "mr-IN"
     elif lang == "hi":
         prompt_prefix = "Make a clear, official bus station public arrival announcement in clear Hindi: "
+        lang_code = "hi-IN"
 
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-tts-preview:generateContent?key={api_key}"
-    payload = {
-        "contents": [{
-            "parts": [{ "text": f'{prompt_prefix}"{text}"' }]
-        }],
-        "generationConfig": {
-            "responseModalities": ["AUDIO"],
-            "speechConfig": {
-                "voiceConfig": {
-                    "prebuiltVoiceConfig": {
-                        "voiceName": "Charon"
-                    }
+    models_to_try = ["gemini-3.8-flash-tts", "gemini-3.8-flash-lite-tts"]
+    last_err = None
+
+    for model_name in models_to_try:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
+        payload = {
+            "contents": [{
+                "parts": [{ "text": f'{prompt_prefix}"{text}"' }]
+            }],
+            "generationConfig": {
+                "responseModalities": ["AUDIO"],
+                "speechConfig": {
+                    "voiceConfig": {
+                        "prebuiltVoiceConfig": {
+                            "voiceName": "Charon"
+                        }
+                    },
+                    "languageCode": lang_code
                 }
             }
         }
-    }
 
-    req_data = json.dumps(payload).encode("utf-8")
-    req = urllib.request.Request(
-        url,
-        data=req_data,
-        headers={"Content-Type": "application/json"}
-    )
+        req_data = json.dumps(payload).encode("utf-8")
+        req = urllib.request.Request(
+            url,
+            data=req_data,
+            headers={"Content-Type": "application/json"}
+        )
 
-    with urllib.request.urlopen(req, timeout=25) as resp:
-        res_json = json.loads(resp.read().decode("utf-8"))
+        try:
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                res_json = json.loads(resp.read().decode("utf-8"))
 
-    parts = res_json.get("candidates", [{}])[0].get("content", {}).get("parts", [])
-    for p in parts:
-        inline = p.get("inlineData")
-        if inline and "data" in inline:
-            pcm_bytes = base64.b64decode(inline["data"])
-            return pcm_to_wav(pcm_bytes, sample_rate=24000)
+            parts = res_json.get("candidates", [{}])[0].get("content", {}).get("parts", [])
+            for p in parts:
+                inline = p.get("inlineData")
+                if inline and "data" in inline:
+                    raw_bytes = base64.b64decode(inline["data"])
+                    if raw_bytes.startswith(b"RIFF"):
+                        return raw_bytes
+                    return pcm_to_wav(raw_bytes, sample_rate=24000)
+        except Exception as e:
+            last_err = e
+            continue
 
-    raise ValueError("No audio content returned by Gemini 3.1 Flash TTS")
+    raise ValueError(f"Gemini TTS generation failed: {last_err}")
+
 
 class handler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
@@ -207,7 +222,7 @@ class handler(BaseHTTPRequestHandler):
             self.send_header("Content-Type", "audio/wav")
             self.send_header("Content-Length", str(len(wav_bytes)))
             self.send_header("Access-Control-Allow-Origin", "*")
-            self.send_header("X-Audio-Source", "gemini-3.1-flash-tts")
+            self.send_header("X-Audio-Source", "gemini-3.8-flash-tts")
             self.end_headers()
             self.wfile.write(wav_bytes)
         except Exception as e:

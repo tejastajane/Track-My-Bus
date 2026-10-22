@@ -2,3 +2,10 @@
 __pycache__/
 *.pyc
 .vercel
+node_modules/
+www/
+android/.gradle/
+android/local.properties
+android/app/build/
+apk/
+audio_cache/
