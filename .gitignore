@@ -9,3 +9,7 @@ android/local.properties
 android/app/build/
 apk/
 audio_cache/
+
+# Local development TLS certificates and private keys
+key.pem
+cert.pem
